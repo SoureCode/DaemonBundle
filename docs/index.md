@@ -4,6 +4,7 @@
 ## Requirements
 
 - PHP 8.2 or higher
+- Symfony 6.3 or higher
 - php-pcntl
 - php-posix
 
