@@ -1,6 +1,6 @@
 {
     "name": "sourecode/daemon-bundle",
-    "type": "project",
+    "type": "symfony-bundle",
     "license": "MIT",
     "autoload": {
         "psr-4": {

@@ -7,6 +7,7 @@ use Psr\Log\LoggerInterface;
 use SoureCode\Bundle\Daemon\Command\DaemonCommand;
 use SoureCode\Bundle\Daemon\Command\DaemonStartCommand;
 use SoureCode\Bundle\Daemon\Command\DaemonStopCommand;
+use SoureCode\Bundle\Daemon\Manager\DaemonManager;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -40,11 +41,22 @@ class SoureCodeDaemonBundle extends AbstractBundle
 
         $services = $container->services();
 
+        $services->set('soure_code_daemon.daemon_manager', DaemonManager::class)
+            ->args([
+                service(LoggerInterface::class),
+                service(Filesystem::class),
+                param('kernel.project_dir'),
+                param('soure_code_daemon.pid_directory'),
+                param('soure_code_daemon.tmp_directory'),
+            ]);
+
+        $services->alias(DaemonManager::class, 'soure_code_daemon.daemon_manager')
+            ->public();
+
         $services->set('soure_code_daemon.command.daemon', DaemonCommand::class)
             ->args([
                 service(LoggerInterface::class),
                 service(ClockInterface::class),
-                service(Filesystem::class),
                 param('kernel.project_dir'),
                 param('soure_code_daemon.pid_directory'),
             ])
@@ -54,24 +66,17 @@ class SoureCodeDaemonBundle extends AbstractBundle
 
         $services->set('soure_code_daemon.command.daemon.start', DaemonStartCommand::class)
             ->args([
-                service(LoggerInterface::class),
-                service(Filesystem::class),
-                param('soure_code_daemon.tmp_directory'),
-                param('kernel.project_dir'),
+                service('soure_code_daemon.daemon_manager'),
             ])
             ->public()
-            ->tag('console.command', ['command' => 'daemon:start'])
-            ->tag('monolog.logger', ['channel' => 'daemon']);
+            ->tag('console.command', ['command' => 'daemon:start']);
 
         $services->set('soure_code_daemon.command.daemon.stop', DaemonStopCommand::class)
             ->args([
-                service(LoggerInterface::class),
-                service(Filesystem::class),
-                param('soure_code_daemon.pid_directory'),
+                service('soure_code_daemon.daemon_manager'),
             ])
             ->public()
-            ->tag('console.command', ['command' => 'daemon:stop'])
-            ->tag('monolog.logger', ['channel' => 'daemon']);
+            ->tag('console.command', ['command' => 'daemon:stop']);
 
     }
 }

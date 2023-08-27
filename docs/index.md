@@ -31,6 +31,26 @@ $ symfony console daemon:stop --id npm
 $ symfony console daemon:stop --all
 ```
 
+An php api is also available:
+
+```php
+use SoureCode\Bundle\Daemon\Manager\DaemonManager;
+
+$daemonManager = $container->get(DaemonManager::class);
+
+// start npm watch as a daemon
+$daemonManager->start('npm', 'npm run watch');
+
+// stop npm watch daemon
+$daemonManager->stop('npm');
+
+// stop all daemons
+$daemonManager->stopAll();
+
+// check if daemon is running
+$daemonManager->isRunning('npm');
+```
+
 ## Installation
 
 Make sure Composer is installed globally, as explained in the

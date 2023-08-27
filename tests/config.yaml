@@ -5,3 +5,7 @@ monolog:
     console:
       type: console
       level: debug
+    file:
+      type: stream
+      path: "%kernel.project_dir%/var/logs/debug.log"
+      level: debug

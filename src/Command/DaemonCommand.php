@@ -4,6 +4,8 @@ namespace SoureCode\Bundle\Daemon\Command;
 
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
+use SoureCode\Bundle\Daemon\Pid\ManagedPid;
+use SoureCode\Bundle\Daemon\Pid\UnmanagedPid;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\SignalableCommandInterface;
@@ -12,8 +14,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Process\Process;
 
 #[AsCommand(
@@ -24,27 +24,23 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
 {
     private LoggerInterface $logger;
     private ClockInterface $clock;
-    private Filesystem $filesystem;
     private string $pidDirectory;
     private string $projectDirectory;
-    private ?Process $process = null;
     private bool $shouldExit = false;
     private int $exitCode = Command::SUCCESS;
-    private ?string $id = null;
-    private ?string $command = null;
-    private ?int $pid = null;
+    private ?string $processCommand = null;
+    private ?ManagedPid $pid = null;
+    private ?Process $process = null;
     private bool $autoRestart = true;
 
     public function __construct(
         LoggerInterface $logger,
         ClockInterface  $clock,
-        Filesystem      $filesystem,
         string          $projectDirectory,
         string          $pidDirectory,
     )
     {
         $this->logger = $logger;
-        $this->filesystem = $filesystem;
         $this->projectDirectory = $projectDirectory;
         $this->pidDirectory = $pidDirectory;
         $this->clock = $clock;
@@ -64,62 +60,60 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
     {
         $this->shouldExit = true;
 
-        if (null !== $this->process && $this->process->isRunning()) {
-            $this->logger->info('Stopping daemon...', $this->getContext());
-            $pid = $this->process->getPid();
+        try {
+            if (null !== $this->process && $this->process->isRunning()) {
+                $ppid = $this->process->getPid();
 
-            posix_kill($pid, $signal);
-
-            for ($i = 0; $i < 5; $i++) {
-                if ($this->process->isRunning() === false) {
-                    break;
+                if ($ppid === null) {
+                    return $this->process->getExitCode();
                 }
 
-                $this->logger->info('Daemon still running...', $this->getContext());
+                $pid = new UnmanagedPid($ppid);
 
-                sleep(1);
-            }
+                $this->logger->info('Stopping daemon process...', [
+                    ...$this->getContext(),
+                    'signal' => $signal,
+                ]);
 
-            if ($this->process->isRunning()) {
-                $this->logger->warning('Daemon did not stop.', $this->getContext());
+                $pid->gracefullyStop(4);
 
-                if ($signal === 15) {
-                    $this->logger->info('Killing daemon...', $this->getContext());
-                    posix_kill($pid, 9);
-                    $this->process->stop(10, 9);
-                    $this->logger->info('Daemon killed.', $this->getContext());
+                if ($this->process->isRunning()) {
+                    $this->logger->warning('Daemon process did not stop.', [
+                        ...$this->getContext(),
+                        'signal' => $signal,
+                    ]);
+
+                    if ($signal === 15) {
+                        $this->logger->info('Killing daemon process...', [
+                            ...$this->getContext(),
+                            'signal' => $signal,
+                        ]);
+                        $pid->sendSignal(9); // SIGKILL
+                        $this->process->stop(10, 9); // SIGKILL
+                        $this->logger->info('Daemon process killed.', [
+                            ...$this->getContext(),
+                            'signal' => $signal,
+                        ]);
+                    } else {
+                        if ($signal === 9) {
+                            $this->pid->setPid(null);
+                        }
+
+                        // continue daemon, as it did not stop
+                        return false;
+                    }
                 } else {
-                    // continue daemon, as it did not stop
-                    return false;
+                    $this->logger->info('Daemon process stopped.', [
+                        ...$this->getContext(),
+                        'signal' => $signal,
+                    ]);
                 }
-            } else {
-                $this->logger->info('Daemon stopped.', $this->getContext());
             }
+        } finally {
+            $this->pid->setPid(null);
         }
-
-        $this->removePidFile();
 
         return $this->exitCode;
-    }
-
-    private function isRunning(): bool
-    {
-        return $this->sendSignal(0);
-    }
-
-    public function sendSignal(int $signal): bool
-    {
-        $filePath = $this->getPidFilePath();
-
-        if ($this->filesystem->exists($filePath) === false) {
-            return false;
-        }
-
-        if ($this->pid === null) {
-            $this->pid = (int)file_get_contents($filePath);
-        }
-
-        return posix_kill($this->pid, $signal);
     }
 
     protected function configure(): void
@@ -132,23 +126,25 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $this->id = $input->getOption('id');
+        $id = $input->getOption('id');
         $this->autoRestart = $input->getOption('auto-restart');
-        $command = $input->getArgument('process');
+        $processCommand = $input->getArgument('process');
 
-        if (is_array($command)) {
-            $this->command = implode(" ", $command);
+        if (is_array($processCommand)) {
+            $this->processCommand = implode(" ", $processCommand);
         } else {
-            $this->command = $command;
+            $this->processCommand = $processCommand;
         }
 
-        if ($this->isRunning()) {
-            $this->logger->warning('Daemon already running.', $this->getContext());
+        $this->pid = new ManagedPid($this->pidDirectory, $id);
 
-            return Command::FAILURE;
+        if ($this->pid->isRunning()) {
+            throw new \RuntimeException('Daemon process already running.');
         }
 
-        $this->logger->info('Starting Daemon...', $this->getContext());
+        $this->pid->setPid(UnmanagedPid::fromGlobals());
+
+        $this->logger->info('Starting daemon process...', $this->getContext());
 
         while ($this->shouldExit === false) {
             $before = $this->clock->now();
@@ -161,12 +157,12 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
             if ($diff < 1 || $this->exitCode !== Command::SUCCESS) {
                 $this->shouldExit = true;
 
-                $this->logger->error('Daemon exited to fast or with an error.', [
+                $this->logger->error('Daemon process exited to fast or with an error.', [
                     'exitCode' => $this->exitCode,
                     ...$this->getContext(),
                 ]);
             } else {
-                $this->logger->info('Daemon exited.', [
+                $this->logger->info('Daemon process exited.', [
                     'exitCode' => $this->exitCode,
                     ...$this->getContext(),
                 ]);
@@ -176,13 +172,13 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
                     continue;
                 }
 
-                $this->logger->info('Restarting daemon...', $this->getContext());
+                $this->logger->info('Restarting daemon process...', $this->getContext());
             }
         }
 
-        $this->logger->info('Daemon stopped.', $this->getContext());
+        $this->logger->info('Daemon process stopped.', $this->getContext());
 
-        $this->removePidFile();
+        $this->pid->setPid(null);
 
         return $this->exitCode;
     }
@@ -190,7 +186,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
     private function runProcess(OutputInterface $output): int
     {
         $this->process = Process::fromShellCommandline(
-            $this->command,
+            $this->processCommand,
             $this->projectDirectory,
             null,
             null,
@@ -208,54 +204,16 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
             }
         });
 
-        $pid = getmypid();
-        $this->dumpPidFile($pid);
-
-        $this->logger->info('Daemon started.', $this->getContext());
+        $this->logger->info('Daemon process started.', $this->getContext());
 
         return $this->process->wait();
-    }
-
-    private function dumpPidFile(int $pid): void
-    {
-        $this->pid = $pid;
-
-        $this->filesystem->dumpFile($this->getPidFilePath(), $this->pid);
-    }
-
-    private function removePidFile(): void
-    {
-        $filePath = $this->getPidFilePath();
-
-        if ($this->filesystem->exists($filePath)) {
-            $this->filesystem->remove($filePath);
-        }
-    }
-
-    public function getPidFilePath(): string
-    {
-        $fileName = self::getPidFileName($this->id);
-
-        if (!$this->filesystem->exists($this->pidDirectory)) {
-            $this->filesystem->mkdir($this->pidDirectory);
-        }
-
-        return Path::join($this->pidDirectory, $fileName);
-    }
-
-    public static function getPidFileName(string $id): string
-    {
-        $hash = hash('sha256', $id);
-
-        return sprintf("%s.pid", $hash);
     }
 
     private function getContext(): array
     {
         return [
-            'id' => $this->id,
-            'command' => $this->command,
-            'pid' => $this->pid,
+            ...$this->pid->toArray(),
+            'command' => $this->processCommand,
         ];
     }
 }
