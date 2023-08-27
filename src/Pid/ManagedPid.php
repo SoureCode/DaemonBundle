@@ -101,6 +101,12 @@ class ManagedPid
         if (file_exists($idFilePath)) {
             unlink($idFilePath);
         }
+
+        $exitFilePath = $this->getExitFilePath();
+
+        if (file_exists($exitFilePath)) {
+            unlink($exitFilePath);
+        }
     }
 
     public function dump(): void
@@ -171,5 +177,31 @@ class ManagedPid
             'id' => $this->id,
             'pid' => $this->pid?->getValue(),
         ];
+    }
+
+    public function getExitFileName(): string
+    {
+        return sprintf("%s.exit", $this->getHash());
+    }
+
+    public function getExitFilePath(): string
+    {
+        $fileName = $this->getExitFileName();
+
+        return Path::join($this->directory, $fileName);
+    }
+
+    public function dumpExitFile(): void
+    {
+        $filePath = $this->getExitFilePath();
+
+        file_put_contents($filePath, '1');
+    }
+
+    public function willProcessExit(): bool
+    {
+        $filePath = $this->getExitFilePath();
+
+        return file_exists($filePath);
     }
 }

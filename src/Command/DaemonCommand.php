@@ -172,6 +172,11 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
                     continue;
                 }
 
+                if ($this->pid->willProcessExit()) {
+                    $this->shouldExit = true;
+                    continue;
+                }
+
                 $this->logger->info('Restarting daemon process...', $this->getContext());
             }
         }
