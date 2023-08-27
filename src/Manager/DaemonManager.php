@@ -40,7 +40,7 @@ class DaemonManager
         return new ManagedPid($this->pidDirectory, $id, $value);
     }
 
-    public function start(string $id, string $processCommand): void
+    public function start(string $id, string $processCommand): bool
     {
         $command = $this->buildCommand($id, $processCommand);
 
@@ -52,7 +52,7 @@ class DaemonManager
                 'command' => $processCommand,
             ]);
 
-            return;
+            return false;
         }
 
         if (!$this->filesystem->exists($this->tmpDirectory)) {
@@ -110,6 +110,8 @@ class DaemonManager
                 ...$pid->toArray(),
                 'command' => $processCommand,
             ]);
+
+            return true;
         } finally {
             $this->filesystem->remove($tempLogFile);
         }
@@ -176,7 +178,7 @@ class DaemonManager
         return implode(" ", $command);
     }
 
-    public function stopAll(): void
+    public function stopAll(): bool
     {
         $this->logger->info('Stopping all daemons...');
 
@@ -184,6 +186,8 @@ class DaemonManager
             ->files()
             ->name('*.id') // by the id files NOT the pid files
             ->in($this->pidDirectory);
+
+        $stopps = [];
 
         foreach ($pidFiles as $pidFile) {
             $filePath = $pidFile->getRealPath();
@@ -194,15 +198,17 @@ class DaemonManager
 
             $id = (int)file_get_contents($filePath);
 
-            $this->stop($id);
+            $stopps[] = $this->stop($id);
 
             $this->filesystem->remove($pidFile->getRealPath());
         }
 
         $this->logger->info('All daemons stopped.');
+
+        return !in_array(false, $stopps, true);
     }
 
-    public function stop(string $id): void
+    public function stop(string $id): bool
     {
         $pid = $this->pid($id);
 
@@ -218,11 +224,15 @@ class DaemonManager
             $this->logger->info('Daemon stopped.', [
                 ...$pid->toArray(),
             ]);
-        } else {
-            $this->logger->warning('Daemon not running.', [
-                ...$pid->toArray(),
-            ]);
+
+            return true;
         }
+
+        $this->logger->warning('Daemon not running.', [
+            ...$pid->toArray(),
+        ]);
+
+        return false;
 
     }
 
