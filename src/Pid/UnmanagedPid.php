@@ -6,6 +6,12 @@ use Symfony\Component\Process\Process;
 
 class UnmanagedPid
 {
+    public static array $defaultStopSignals = [
+        15, // SIGTERM
+        2, // SIGINT
+        9, // SIGKILL
+    ];
+
     /**
      * The process id.
      */
@@ -31,38 +37,47 @@ class UnmanagedPid
         return $this->value;
     }
 
-    public function gracefullyStop(int $timeout = 10): void
+    /**
+     * Sends multiple signals to the process to stop it gracefully.
+     *
+     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param array|null $signals Ordered list of signals to send.
+     * @return void
+     */
+    public function gracefullyStop(int $timeout = 10, ?array $signals = null): bool
     {
         if (!$this->isRunning()) {
             $this->value = null;
-            return;
+            return true;
         }
 
-        $this->sendSignal(2); // SIGINT
-
-        $stopped = $this->wait($timeout);
-
-        if ($stopped) {
-            $this->value = null;
-            return;
+        if (null === $signals) {
+            $signals = self::$defaultStopSignals;
         }
 
-        $this->sendSignal(15); // SIGTERM
+        foreach ($signals as $signal) {
+            if (!is_int($signal)) {
+                throw new \InvalidArgumentException(sprintf('Signal must be an integer, got "%s".', gettype($signal)));
+            }
 
-        $stopped = $this->wait($timeout);
-
-        if ($stopped) {
-            $this->value = null;
-            return;
+            if ($signal < 1) {
+                throw new \InvalidArgumentException(sprintf('Signal must be greater than 0, got "%s".', $signal));
+            }
         }
 
-        if ($this->isRunning()) {
-            $this->sendSignal(9); // SIGKILL
+        foreach ($signals as $signal) {
+            $this->sendSignal($signal);
 
-            // Now we hope that the process is dead.
-            // Long live the process.
-            $this->value = null;
+            $stopped = $this->wait($timeout);
+
+            if ($stopped) {
+                $this->value = null;
+                return true;
+            }
         }
+
+        // Now we hope that the process is dead, but we cannot be sure, so we assume it failed to stop.
+        return false;
     }
 
     public function isRunning(): bool
@@ -87,7 +102,7 @@ class UnmanagedPid
     {
         $milliseconds = 10;
         $microseconds = $milliseconds * 1000;
-        $iterations = $timeout * (1000 / $milliseconds);
+        $iterations = $timeout / ($milliseconds / 1000);
 
         for ($i = 0; $i < $iterations; $i++) {
             if (!$this->isRunning()) {

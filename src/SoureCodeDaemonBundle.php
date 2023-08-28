@@ -50,8 +50,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
         $container->parameters()
             ->set('soure_code_daemon.pid_directory', $config['pid_directory'])
             ->set('soure_code_daemon.tmp_directory', $config['tmp_directory'])
-            ->set('soure_code_daemon.check_delay', $config['check_delay'])
-        ;
+            ->set('soure_code_daemon.check_delay', $config['check_delay']);
 
         $services = $container->services();
 

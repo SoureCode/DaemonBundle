@@ -3,9 +3,10 @@
 namespace SoureCode\Bundle\Daemon\Pid;
 
 use RuntimeException;
+use Stringable;
 use Symfony\Component\Filesystem\Path;
 
-class ManagedPid
+class ManagedPid implements Stringable
 {
     /**
      * The directory where the pid file is stored.
@@ -82,27 +83,6 @@ class ManagedPid
         }
     }
 
-    private function remove(): void
-    {
-        $filePath = $this->getFilePath();
-
-        if (file_exists($filePath)) {
-            unlink($filePath);
-        }
-
-        $idFilePath = $this->getIdFilePath();
-
-        if (file_exists($idFilePath)) {
-            unlink($idFilePath);
-        }
-
-        $exitFilePath = $this->getExitFilePath();
-
-        if (file_exists($exitFilePath)) {
-            unlink($exitFilePath);
-        }
-    }
-
     public function getIdFilePath(): string
     {
         $fileName = $this->getIdFileName();
@@ -113,18 +93,6 @@ class ManagedPid
     public function getIdFileName(): string
     {
         return sprintf("%s.id", $this->getHash());
-    }
-
-    public function getExitFilePath(): string
-    {
-        $fileName = $this->getExitFileName();
-
-        return Path::join($this->directory, $fileName);
-    }
-
-    public function getExitFileName(): string
-    {
-        return sprintf("%s.exit", $this->getHash());
     }
 
     public function dump(): void
@@ -184,14 +152,6 @@ class ManagedPid
         $this->init(null);
     }
 
-    public function toArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'pid' => $this->pid?->getValue(),
-        ];
-    }
-
     public function dumpExitFile(): void
     {
         $filePath = $this->getExitFilePath();
@@ -199,10 +159,74 @@ class ManagedPid
         file_put_contents($filePath, '1');
     }
 
+    public function getExitFilePath(): string
+    {
+        $fileName = $this->getExitFileName();
+
+        return Path::join($this->directory, $fileName);
+    }
+
+    public function getExitFileName(): string
+    {
+        return sprintf("%s.exit", $this->getHash());
+    }
+
     public function willProcessExit(): bool
     {
         $filePath = $this->getExitFilePath();
 
         return file_exists($filePath);
+    }
+
+    /**
+     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param array|null $signals Ordered list of signals to send.
+     * @return bool true if the process is stopped, false otherwise.
+     */
+    public function stop(int $timeout = 10, ?array $signals = null): bool
+    {
+        $this->reload();
+
+        if (null === $this->pid) {
+            return false;
+        }
+
+        return $this->pid->gracefullyStop($timeout, $signals);
+    }
+
+    public function remove(): void
+    {
+        $filePath = $this->getFilePath();
+
+        if (file_exists($filePath)) {
+            unlink($filePath);
+        }
+
+        $idFilePath = $this->getIdFilePath();
+
+        if (file_exists($idFilePath)) {
+            unlink($idFilePath);
+        }
+
+        $exitFilePath = $this->getExitFilePath();
+
+        if (file_exists($exitFilePath)) {
+            unlink($exitFilePath);
+        }
+    }
+
+    public function __toString()
+    {
+        if (null === $this->pid) {
+            return 'dpid("' . $this->id . '", null)';
+        }
+
+        $value = $this->pid->getValue();
+
+        if (null === $value) {
+            return 'pid("' . $this->id . '", null)';
+        }
+
+        return 'dpid("' . $this->id . '", ' . $value . ')';
     }
 }

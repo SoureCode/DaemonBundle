@@ -55,7 +55,7 @@ class DaemonManager
 
         if ($pid->exists()) {
             $this->logger->info('Daemon already running.', [
-                ...$pid->toArray(),
+                'pid' => (string)$pid,
                 'command' => $processCommand,
             ]);
 
@@ -96,7 +96,7 @@ class DaemonManager
             ]);
 
             $this->logger->info('Starting daemon...', [
-                ...$pid->toArray(),
+                'pid' => (string)$pid,
                 'command' => $processCommand,
             ]);
 
@@ -111,7 +111,7 @@ class DaemonManager
 
             if ($bashLog !== '') {
                 $this->logger->error('Daemon bash contains output.', [
-                    ...$pid->toArray(),
+                    'pid' => (string)$pid,
                     'command' => $processCommand,
                     'bash_log' => $bashLog,
                 ]);
@@ -122,7 +122,7 @@ class DaemonManager
             if ('' !== $commandLog) {
                 if ($this->containsKeyword($commandLog)) {
                     $this->logger->error('Daemon command output contains error keyword.', [
-                        ...$pid->toArray(),
+                        'pid' => (string)$pid,
                         'command' => $processCommand,
                         'command_log' => $commandLog,
                     ]);
@@ -133,7 +133,7 @@ class DaemonManager
 
             if (!$pid->isRunning()) {
                 $this->logger->error('Daemon crashed after start.', [
-                    ...$pid->toArray(),
+                    'pid' => (string)$pid,
                     'command' => $processCommand,
                     'bash_log' => $bashLog,
                     'command_log' => $commandLog,
@@ -143,7 +143,7 @@ class DaemonManager
             }
 
             $this->logger->info('Daemon started.', [
-                ...$pid->toArray(),
+                'pid' => (string)$pid,
                 'command' => $processCommand,
             ]);
 
@@ -231,16 +231,29 @@ class DaemonManager
         return false;
     }
 
-    public function stopAll(): bool
+    public function isRunning(string $id): bool
     {
-        $this->logger->info('Stopping all daemons...');
+        return $this->pid($id)->isRunning();
+    }
+
+    /**
+     * @param string|null $idPattern Pattern to match the daemon id.
+     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param array|null $signals Ordered list of signals to send.
+     * @return bool true if all daemons were stopped successfully
+     */
+    public function stopAll(?string $idPattern = null, int $timeout = 10, ?array $signals = null): bool
+    {
+        $this->logger->info('Stopping all daemons...', [
+            'id_pattern' => $idPattern,
+        ]);
 
         $pidFiles = (new Finder())
             ->files()
             ->name('*.id') // by the id files NOT the pid files
             ->in($this->pidDirectory);
 
-        $stopps = [];
+        $stopResults = [];
 
         foreach ($pidFiles as $pidFile) {
             $filePath = $pidFile->getRealPath();
@@ -249,49 +262,82 @@ class DaemonManager
                 continue;
             }
 
-            $id = (int)file_get_contents($filePath);
+            $id = file_get_contents($filePath);
 
-            $stopps[] = $this->stop($id);
+            if (null !== $idPattern && !preg_match($idPattern, $id)) {
+                $this->logger->info('Skipping stop daemon...', [
+                    'id' => $id,
+                ]);
+                continue;
+            }
 
-            $this->filesystem->remove($pidFile->getRealPath());
+            $pid = $this->pid($id);
+
+            $stopped = $this->stop($pid, $timeout, $signals);
+
+            if ($stopped) {
+                $pid->remove();
+            }
+
+            $stopResults[(string)$pid] = $stopped;
         }
 
-        $this->logger->info('All daemons stopped.');
+        $allStopped = !in_array(false, $stopResults, true);
 
-        return !in_array(false, $stopps, true);
+        if ($allStopped) {
+            $this->logger->info('All daemons stopped.', [
+                'stop_results' => $stopResults,
+            ]);
+        } else {
+            $this->logger->error('Not all daemons stopped.', [
+                'stop_results' => $stopResults,
+            ]);
+        }
+
+        return $allStopped;
     }
 
-    public function stop(string $id): bool
+    /**
+     * @param string $id Daemon id.
+     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param array|null $signals Ordered list of signals to send.
+     * @return bool true if the process is stopped, false otherwise.
+     */
+    public function stop(string|ManagedPid $pid, int $timeout = 10, ?array $signals = null): bool
     {
-        $pid = $this->pid($id);
-        $pid->reload();
+        if (is_string($pid)) {
+            $pid = $this->pid($pid);
+        }
 
         $this->logger->info('Stopping daemon...', [
-            ...$pid->toArray(),
+            'pid' => (string)$pid,
         ]);
 
-        $unmanagedPid = $pid->getPid();
+        if ($pid->isRunning()) {
+            $stopped = $pid->stop($timeout, $signals);
 
-        if (null !== $unmanagedPid && $unmanagedPid->isRunning()) {
-            $unmanagedPid->gracefullyStop();
+            if (!$stopped) {
+                $this->logger->error('Daemon could not be stopped.', [
+                    'pid' => (string)$pid,
+                ]);
+
+                return false;
+            }
 
             $this->logger->info('Daemon stopped.', [
-                ...$pid->toArray(),
+                'pid' => (string)$pid,
             ]);
+
+            $pid->remove();
 
             return true;
         }
 
         $this->logger->warning('Daemon not running.', [
-            ...$pid->toArray(),
+            'pid' => (string)$pid,
         ]);
 
         return false;
 
-    }
-
-    public function isRunning(string $id): bool
-    {
-        return $this->pid($id)->isRunning();
     }
 }

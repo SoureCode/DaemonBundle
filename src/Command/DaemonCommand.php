@@ -54,6 +54,9 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
         return [
             15, // SIGTERM
             2, // SIGINT
+            1, // SIGHUP
+            3, // SIGQUIT
+            6, // SIGABRT
         ];
     }
 
@@ -76,7 +79,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
                     'signal' => $signal,
                 ]);
 
-                $pid->gracefullyStop(4);
+                $pid->gracefullyStop();
 
                 if ($this->process->isRunning()) {
                     $this->logger->warning('Daemon process did not stop.', [
@@ -111,7 +114,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
                 }
             }
         } finally {
-            $this->pid->setPid(null);
+            $this->pid->remove();
         }
 
         return $this->exitCode;
@@ -120,7 +123,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
     private function getContext(): array
     {
         return [
-            ...$this->pid->toArray(),
+            'pid' => null !== $this->pid ? (string)$this->pid : null,
             'command' => $this->processCommand,
         ];
     }
@@ -192,7 +195,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
 
         $this->logger->info('Daemon process stopped.', $this->getContext());
 
-        $this->pid->setPid(null);
+        $this->pid->remove();
 
         return $this->exitCode;
     }
