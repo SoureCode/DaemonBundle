@@ -4,6 +4,7 @@ namespace SoureCode\Bundle\Daemon\Command;
 
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 use SoureCode\Bundle\Daemon\Pid\ManagedPid;
 use SoureCode\Bundle\Daemon\Pid\UnmanagedPid;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -116,6 +117,14 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
         return $this->exitCode;
     }
 
+    private function getContext(): array
+    {
+        return [
+            ...$this->pid->toArray(),
+            'command' => $this->processCommand,
+        ];
+    }
+
     protected function configure(): void
     {
         $this
@@ -139,7 +148,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
         $this->pid = new ManagedPid($this->pidDirectory, $id);
 
         if ($this->pid->isRunning()) {
-            throw new \RuntimeException('Daemon process already running.');
+            throw new RuntimeException('Daemon process already running.');
         }
 
         $this->pid->setPid(UnmanagedPid::fromGlobals());
@@ -212,13 +221,5 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
         $this->logger->info('Daemon process started.', $this->getContext());
 
         return $this->process->wait();
-    }
-
-    private function getContext(): array
-    {
-        return [
-            ...$this->pid->toArray(),
-            'command' => $this->processCommand,
-        ];
     }
 }

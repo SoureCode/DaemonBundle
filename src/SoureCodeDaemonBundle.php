@@ -25,9 +25,21 @@ class SoureCodeDaemonBundle extends AbstractBundle
             ->children()
                 ->scalarNode('pid_directory')
                     ->defaultValue('%kernel.project_dir%/var/run')
+                    ->info('The directory where the pid, id and exit files are stored.')
                 ->end()
                 ->scalarNode('tmp_directory')
                     ->defaultValue('%kernel.project_dir%/var/tmp')
+                    ->info('The directory where the tmp files are stored.')
+                ->end()
+                ->scalarNode('check_delay')
+                    ->defaultValue(2)
+                    ->info('The delay between starting daemon and checking if the daemon is really running and doesn\'t contain any errors.')
+                    ->validate()
+                        ->ifTrue(fn($value) => !is_int($value))
+                        ->thenInvalid('The check delay must be an integer.')
+                        ->ifTrue(fn($value) => $value < 1)
+                        ->thenInvalid('The check delay must be greater than 0.')
+                    ->end()
                 ->end()
             ->end();
         // @formatter:on
@@ -37,7 +49,9 @@ class SoureCodeDaemonBundle extends AbstractBundle
     {
         $container->parameters()
             ->set('soure_code_daemon.pid_directory', $config['pid_directory'])
-            ->set('soure_code_daemon.tmp_directory', $config['tmp_directory']);
+            ->set('soure_code_daemon.tmp_directory', $config['tmp_directory'])
+            ->set('soure_code_daemon.check_delay', $config['check_delay'])
+        ;
 
         $services = $container->services();
 
@@ -48,6 +62,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
                 param('kernel.project_dir'),
                 param('soure_code_daemon.pid_directory'),
                 param('soure_code_daemon.tmp_directory'),
+                param('soure_code_daemon.check_delay'),
             ]);
 
         $services->alias(DaemonManager::class, 'soure_code_daemon.daemon_manager')

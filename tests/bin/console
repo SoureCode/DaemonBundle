@@ -7,14 +7,14 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\MonologBundle\MonologBundle;
 use Symfony\Component\Filesystem\Path;
 
-if (!is_file(dirname(__DIR__).'/../vendor/autoload_runtime.php')) {
+if (!is_file(dirname(__DIR__) . '/../vendor/autoload_runtime.php')) {
     throw new LogicException('Symfony Runtime is missing. Try running "composer require symfony/runtime".');
 }
 
-require_once dirname(__DIR__).'/../vendor/autoload_runtime.php';
+require_once dirname(__DIR__) . '/../vendor/autoload_runtime.php';
 
 return function (array $context) {
-    $kernel = new TestKernel($context['APP_ENV'], (bool) $context['APP_DEBUG']);
+    $kernel = new TestKernel($context['APP_ENV'], (bool)$context['APP_DEBUG']);
     $kernel->addTestBundle(SoureCodeDaemonBundle::class);
     $kernel->addTestBundle(MonologBundle::class);
     $kernel->addTestConfig(Path::join(__DIR__, '..', 'config.yaml'));

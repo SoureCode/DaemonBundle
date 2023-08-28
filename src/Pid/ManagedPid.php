@@ -2,6 +2,7 @@
 
 namespace SoureCode\Bundle\Daemon\Pid;
 
+use RuntimeException;
 use Symfony\Component\Filesystem\Path;
 
 class ManagedPid
@@ -33,6 +34,21 @@ class ManagedPid
         $this->init($value);
     }
 
+    private function init(?int $value): void
+    {
+        if ($value === null) {
+            $filePath = $this->getFilePath();
+
+            if (file_exists($filePath)) {
+                $this->init((int)file_get_contents($filePath));
+            } else {
+                $this->pid = null;
+            }
+        } else {
+            $this->setPid(new UnmanagedPid($value));
+        }
+    }
+
     public function getFilePath(): string
     {
         $fileName = $this->getFileName();
@@ -43,18 +59,6 @@ class ManagedPid
     public function getFileName(): string
     {
         return sprintf("%s.pid", $this->getHash());
-    }
-
-    public function getIdFileName(): string
-    {
-        return sprintf("%s.id", $this->getHash());
-    }
-
-    public function getIdFilePath(): string
-    {
-        $fileName = $this->getIdFileName();
-
-        return Path::join($this->directory, $fileName);
     }
 
     public function getHash(): string
@@ -78,16 +82,6 @@ class ManagedPid
         }
     }
 
-    public function getId(): string
-    {
-        return $this->id;
-    }
-
-    public function getDirectory(): string
-    {
-        return $this->directory;
-    }
-
     private function remove(): void
     {
         $filePath = $this->getFilePath();
@@ -109,6 +103,30 @@ class ManagedPid
         }
     }
 
+    public function getIdFilePath(): string
+    {
+        $fileName = $this->getIdFileName();
+
+        return Path::join($this->directory, $fileName);
+    }
+
+    public function getIdFileName(): string
+    {
+        return sprintf("%s.id", $this->getHash());
+    }
+
+    public function getExitFilePath(): string
+    {
+        $fileName = $this->getExitFileName();
+
+        return Path::join($this->directory, $fileName);
+    }
+
+    public function getExitFileName(): string
+    {
+        return sprintf("%s.exit", $this->getHash());
+    }
+
     public function dump(): void
     {
         if (null === $this->pid) {
@@ -119,7 +137,7 @@ class ManagedPid
             $directory = $this->directory;
 
             if (!mkdir($directory, 0777, true) && !is_dir($directory)) {
-                throw new \RuntimeException(sprintf('Directory "%s" could not be created.', $directory));
+                throw new RuntimeException(sprintf('Directory "%s" could not be created.', $directory));
             }
         }
 
@@ -130,24 +148,14 @@ class ManagedPid
         file_put_contents($idFilePath, $this->id);
     }
 
-    public function reload(): void
+    public function getId(): string
     {
-        $this->init(null);
+        return $this->id;
     }
 
-    private function init(?int $value): void
+    public function getDirectory(): string
     {
-        if ($value === null) {
-            $filePath = $this->getFilePath();
-
-            if (file_exists($filePath)) {
-                $this->init((int)file_get_contents($filePath));
-            } else {
-                $this->pid = null;
-            }
-        } else {
-            $this->setPid(new UnmanagedPid($value));
-        }
+        return $this->directory;
     }
 
     public function exists(): bool
@@ -171,24 +179,17 @@ class ManagedPid
         return $this->pid->sendSignal($signal);
     }
 
+    public function reload(): void
+    {
+        $this->init(null);
+    }
+
     public function toArray(): array
     {
         return [
             'id' => $this->id,
             'pid' => $this->pid?->getValue(),
         ];
-    }
-
-    public function getExitFileName(): string
-    {
-        return sprintf("%s.exit", $this->getHash());
-    }
-
-    public function getExitFilePath(): string
-    {
-        $fileName = $this->getExitFileName();
-
-        return Path::join($this->directory, $fileName);
     }
 
     public function dumpExitFile(): void

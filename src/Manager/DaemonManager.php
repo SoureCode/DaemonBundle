@@ -3,7 +3,6 @@
 namespace SoureCode\Bundle\Daemon\Manager;
 
 use Psr\Log\LoggerInterface;
-use RuntimeException;
 use SoureCode\Bundle\Daemon\Command\DaemonCommand;
 use SoureCode\Bundle\Daemon\Pid\ManagedPid;
 use Symfony\Component\Filesystem\Filesystem;
@@ -11,14 +10,25 @@ use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\PhpExecutableFinder;
+use const DIRECTORY_SEPARATOR;
 
 class DaemonManager
 {
+    private static array $errorKeywords = [
+        // Error from logger
+        "[ERROR]",
+        // PHP Fatal error
+        "PHP Fatal error",
+        // Any Exception
+        "Exception",
+    ];
+
     private string $pidDirectory;
     private string $projectDirectory;
     private string $tmpDirectory;
     private Filesystem $filesystem;
     private LoggerInterface $logger;
+    private int $checkDelay;
 
     public function __construct(
         LoggerInterface $logger,
@@ -26,6 +36,7 @@ class DaemonManager
         string          $projectDirectory,
         string          $pidDirectory,
         string          $tmpDirectory,
+        int             $checkDelay,
     )
     {
         $this->logger = $logger;
@@ -33,11 +44,7 @@ class DaemonManager
         $this->projectDirectory = $projectDirectory;
         $this->pidDirectory = $pidDirectory;
         $this->tmpDirectory = $tmpDirectory;
-    }
-
-    public function pid(string $id, ?int $value = null): ManagedPid
-    {
-        return new ManagedPid($this->pidDirectory, $id, $value);
+        $this->checkDelay = $checkDelay;
     }
 
     public function start(string $id, string $processCommand): bool
@@ -59,21 +66,33 @@ class DaemonManager
             $this->filesystem->mkdir($this->tmpDirectory);
         }
 
-        $tempLogFile = $this->filesystem->tempnam($this->tmpDirectory, $pid->getHash(), '.log');
+        $commandLogFile = $this->filesystem->tempnam($this->tmpDirectory, $pid->getHash(), '_bash.log');
+        $bashLogFile = $this->filesystem->tempnam($this->tmpDirectory, $pid->getHash(), '_command.log');
 
         try {
             $bashBinary = $this->findBinary('bash');
 
-            $shellCommand = implode(" ", [
+            $bashCommand = [
                 $bashBinary,
                 '-c',
                 self::escape($command),
-                '>',
-                $tempLogFile,
-                '2>&1',
-                '&',
-                'disown',
+                ">",
+                $commandLogFile,
+                "2>&1",
+                "&",
+                "disown",
                 '$!',
+            ];
+
+            $bashCommand = implode(" ", $bashCommand);
+
+            $shellCommand = implode(" ", [
+                $bashBinary,
+                '-c',
+                self::escape($bashCommand),
+                ">",
+                $bashLogFile,
+                "2>&1",
             ]);
 
             $this->logger->info('Starting daemon...', [
@@ -83,28 +102,45 @@ class DaemonManager
 
             shell_exec($shellCommand);
 
-            // wait for possible error
-            sleep(1);
+            sleep($this->checkDelay);
 
-            $contents = file_get_contents($tempLogFile);
+            $pid->reload();
 
-            if ('' !== $contents) {
-                $keywords = [
-                    'ERROR',
-                    'PHP Fatal error',
-                    'Exception',
-                ];
+            $bashLog = trim(file_get_contents($bashLogFile));
+            $commandLog = trim(file_get_contents($commandLogFile));
 
-                foreach ($keywords as $keyword) {
-                    if (str_contains($contents, $keyword)) {
-                        $exception = new RuntimeException($contents);
+            if ($bashLog !== '') {
+                $this->logger->error('Daemon bash contains output.', [
+                    ...$pid->toArray(),
+                    'command' => $processCommand,
+                    'bash_log' => $bashLog,
+                ]);
 
-                        throw new RuntimeException("Daemon exited with an error.", 0, $exception);
-                    }
+                return false;
+            }
+
+            if ('' !== $commandLog) {
+                if ($this->containsKeyword($commandLog)) {
+                    $this->logger->error('Daemon command output contains error keyword.', [
+                        ...$pid->toArray(),
+                        'command' => $processCommand,
+                        'command_log' => $commandLog,
+                    ]);
+
+                    return false;
                 }
             }
 
-            $pid->reload();
+            if (!$pid->isRunning()) {
+                $this->logger->error('Daemon crashed after start.', [
+                    ...$pid->toArray(),
+                    'command' => $processCommand,
+                    'bash_log' => $bashLog,
+                    'command_log' => $commandLog,
+                ]);
+
+                return false;
+            }
 
             $this->logger->info('Daemon started.', [
                 ...$pid->toArray(),
@@ -113,13 +149,21 @@ class DaemonManager
 
             return true;
         } finally {
-            $this->filesystem->remove($tempLogFile);
+            $this->filesystem->remove($commandLogFile);
+            $this->filesystem->remove($bashLogFile);
         }
     }
 
-    private function getConsolePath(): string
+    private function buildCommand(string $id, string $processCommand): string
     {
-        return Path::join($this->projectDirectory, 'bin', 'console');
+        $command = $this->getPhpBinary();
+        $command[] = $this->getConsolePath();
+        $command[] = DaemonCommand::getDefaultName();
+        $command[] = '--id';
+        $command[] = $id;
+        $command[] = self::escape($processCommand);
+
+        return implode(" ", $command);
     }
 
     private function getPhpBinary(): ?array
@@ -134,10 +178,9 @@ class DaemonManager
         return array_merge([$php], $executableFinder->findArguments());
     }
 
-    private function findBinary(string $binary): ?string
+    private function getConsolePath(): string
     {
-        return (new ExecutableFinder())
-            ->find($binary);
+        return Path::join($this->projectDirectory, 'bin', 'console');
     }
 
     /**
@@ -149,7 +192,7 @@ class DaemonManager
             return '""';
         }
 
-        if ('\\' !== \DIRECTORY_SEPARATOR) {
+        if ('\\' !== DIRECTORY_SEPARATOR) {
             return "'" . str_replace("'", "'\\''", $argument) . "'";
         }
 
@@ -166,16 +209,26 @@ class DaemonManager
         return '"' . str_replace(['"', '^', '%', '!', "\n"], ['""', '"^^"', '"^%"', '"^!"', '!LF!'], $argument) . '"';
     }
 
-    private function buildCommand(string $id, string $processCommand): string
+    public function pid(string $id, ?int $value = null): ManagedPid
     {
-        $command = $this->getPhpBinary();
-        $command[] = $this->getConsolePath();
-        $command[] = DaemonCommand::getDefaultName();
-        $command[] = '--id';
-        $command[] = $id;
-        $command[] = self::escape($processCommand);
+        return new ManagedPid($this->pidDirectory, $id, $value);
+    }
 
-        return implode(" ", $command);
+    private function findBinary(string $binary): ?string
+    {
+        return (new ExecutableFinder())
+            ->find($binary);
+    }
+
+    private function containsKeyword(string $log): bool
+    {
+        foreach (self::$errorKeywords as $keyword) {
+            if (str_contains($log, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function stopAll(): bool
@@ -211,6 +264,7 @@ class DaemonManager
     public function stop(string $id): bool
     {
         $pid = $this->pid($id);
+        $pid->reload();
 
         $this->logger->info('Stopping daemon...', [
             ...$pid->toArray(),

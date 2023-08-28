@@ -2,6 +2,8 @@
 
 namespace SoureCode\Bundle\Daemon\Tests;
 
+use Monolog\Handler\TestHandler;
+use Monolog\LogRecord;
 use Nyholm\BundleTest\TestKernel;
 use SoureCode\Bundle\Daemon\SoureCodeDaemonBundle;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -31,6 +33,14 @@ abstract class AbstractBaseTest extends KernelTestCase
         return $kernel;
     }
 
+    protected function assertProcessExists(string $process): void
+    {
+        $processes = $this->getProcesses();
+        $processList = implode(PHP_EOL, $processes);
+
+        $this->assertStringContainsString($process, $processList);
+    }
+
     protected function getProcesses(): array
     {
         $whoami = exec('whoami');
@@ -42,19 +52,36 @@ abstract class AbstractBaseTest extends KernelTestCase
         return array_values(array_map('trim', $output));
     }
 
-    protected function assertProcessExists(string $process): void
-    {
-        $processes = $this->getProcesses();
-        $processList = implode(PHP_EOL, $processes);
-
-        $this->assertStringContainsString($process, $processList);
-    }
-
     protected function assertProcessNotExists(string $process): void
     {
         $processes = $this->getProcesses();
         $processList = implode(PHP_EOL, $processes);
 
         $this->assertStringNotContainsString($process, $processList);
+    }
+
+    protected function getTestHandler(): TestHandler
+    {
+        return self::getContainer()->get('monolog.handler.testing');
+    }
+
+    protected function hasRecordThatMatches(string $pattern): bool
+    {
+        $testHandler = $this->getTestHandler();
+
+        $records = array_map(
+            static fn(LogRecord $record) => $record->formatted,
+            $testHandler->getRecords()
+        );
+
+        $pattern = preg_quote($pattern, '/');
+
+        foreach ($records as $record) {
+            if (preg_match('/' . $pattern . '/im', $record)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

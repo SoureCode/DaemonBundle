@@ -31,24 +31,6 @@ class UnmanagedPid
         return $this->value;
     }
 
-    public function isRunning(): bool
-    {
-        if (null === $this->value) {
-            return false;
-        }
-
-        return $this->sendSignal(0);
-    }
-
-    public function sendSignal(int $signal): bool
-    {
-        if (null === $this->value) {
-            return false;
-        }
-
-        return posix_kill($this->value, $signal);
-    }
-
     public function gracefullyStop(int $timeout = 10): void
     {
         if (!$this->isRunning()) {
@@ -81,6 +63,24 @@ class UnmanagedPid
             // Long live the process.
             $this->value = null;
         }
+    }
+
+    public function isRunning(): bool
+    {
+        if (null === $this->value) {
+            return false;
+        }
+
+        return $this->sendSignal(0);
+    }
+
+    public function sendSignal(int $signal): bool
+    {
+        if (null === $this->value) {
+            return false;
+        }
+
+        return posix_kill($this->value, $signal);
     }
 
     private function wait(int $timeout = 10): bool
