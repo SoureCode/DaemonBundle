@@ -43,9 +43,13 @@ final class DaemonStartCommand extends Command
             $command = implode(" ", $command);
         }
 
-        $this->daemonManager->start($id, $command);
+        $started = $this->daemonManager->start($id, $command);
 
-        return Command::SUCCESS;
+        if ($started) {
+            return Command::SUCCESS;
+        }
+
+        return Command::FAILURE;
     }
 
 }

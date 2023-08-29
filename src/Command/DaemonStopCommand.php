@@ -66,16 +66,20 @@ final class DaemonStopCommand extends Command
             throw new RuntimeException('You cannot use --id and --pattern at the same time.');
         }
 
-        if($pattern) {
+        if ($pattern) {
             $pattern = sprintf("/%s/i", preg_quote($pattern, '/'));
         }
 
         if ($all) {
-            $this->daemonManager->stopAll($pattern, $timeout, $signals);
+            $stopped = $this->daemonManager->stopAll($pattern, $timeout, $signals);
         } else {
-            $this->daemonManager->stop($id, $timeout, $signals);
+            $stopped = $this->daemonManager->stop($id, $timeout, $signals);
         }
 
-        return Command::SUCCESS;
+        if ($stopped) {
+            return Command::SUCCESS;
+        }
+
+        return Command::FAILURE;
     }
 }
