@@ -33,7 +33,14 @@ class DaemonManager
      * @var int Delay in microseconds between checks.
      */
     private int $checkDelay;
+    /**
+     * @var int Time in seconds after which the process is considered not started
+     */
     private int $checkTimeout;
+    /**
+     * @var int Time in microseconds to wait before checking logs and if it is still running.
+     */
+    private int $logCheckDelay;
 
     public function __construct(
         LoggerInterface $logger,
@@ -43,6 +50,7 @@ class DaemonManager
         string          $tmpDirectory,
         int             $checkDelay,
         int             $checkTimeout,
+        int             $logCheckDelay,
     )
     {
         $this->logger = $logger;
@@ -52,6 +60,7 @@ class DaemonManager
         $this->tmpDirectory = $tmpDirectory;
         $this->checkDelay = $checkDelay;
         $this->checkTimeout = $checkTimeout;
+        $this->logCheckDelay = $logCheckDelay;
     }
 
     public function start(string $id, string $processCommand): bool
@@ -112,6 +121,8 @@ class DaemonManager
             $this->doCheck(function () use ($pid) {
                 return $pid->isRunning();
             });
+
+            usleep($this->logCheckDelay);
 
             $bashLog = trim(file_get_contents($bashLogFile));
             $commandLog = trim(file_get_contents($commandLogFile));

@@ -54,6 +54,18 @@ class SoureCodeDaemonBundle extends AbstractBundle
                         ->ifTrue(fn($value) => $value > 10)
                         ->thenInvalid('Wtf are you doing? Waiting more than 10 seconds for a process to start? Really?')
                     ->end()
+                ->end()
+                ->scalarNode('log_check_delay')
+                    ->defaultValue(100 * 1000) // 100ms
+                    ->info('Time in microseconds to wait before checking logs and if it is still running.')
+                    ->validate()
+                        ->ifTrue(fn($value) => !is_int($value))
+                        ->thenInvalid('The check delay must be an integer.')
+                        ->ifTrue(fn($value) => $value < 1)
+                        ->thenInvalid('The check delay must be greater than 0.')
+                        ->ifTrue(fn($value) => $value > 5 * 1000 * 1000) // 5s
+                        ->thenInvalid('Wtf are you doing? Waiting more than 5 seconds for a process to start? Really?')
+                    ->end()
             ->end();
         // @formatter:on
     }
@@ -65,6 +77,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
             ->set('soure_code_daemon.tmp_directory', $config['tmp_directory'])
             ->set('soure_code_daemon.check_delay', $config['check_delay'])
             ->set('soure_code_daemon.check_timeout', $config['check_timeout'])
+            ->set('soure_code_daemon.log_check_delay', $config['log_check_delay'])
         ;
 
         $services = $container->services();
@@ -78,6 +91,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
                 param('soure_code_daemon.tmp_directory'),
                 param('soure_code_daemon.check_delay'),
                 param('soure_code_daemon.check_timeout'),
+                param('soure_code_daemon.log_check_delay'),
             ]);
 
         $services->alias(DaemonManager::class, 'soure_code_daemon.daemon_manager')
