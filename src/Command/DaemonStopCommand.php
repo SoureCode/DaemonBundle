@@ -46,6 +46,10 @@ final class DaemonStopCommand extends Command
         $timeout = $input->getOption('timeout') ?? 10;
         $signals = $input->getOption('signal') ?? null;
 
+        if (empty($signals)) {
+            $signals = null;
+        }
+
         if (!is_numeric($timeout)) {
             throw new RuntimeException('Timeout must be numeric.');
         }
