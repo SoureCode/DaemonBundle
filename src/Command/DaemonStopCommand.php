@@ -4,6 +4,7 @@ namespace SoureCode\Bundle\Daemon\Command;
 
 use RuntimeException;
 use SoureCode\Bundle\Daemon\Manager\DaemonManager;
+use SoureCode\Bundle\Daemon\Pid\UnmanagedPid;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -30,14 +31,28 @@ final class DaemonStopCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('all', 'a', InputOption::VALUE_NONE, 'Stop all daemons')
-            ->addOption('id', 'i', InputOption::VALUE_OPTIONAL, 'The daemon id');
+            ->addOption('all', 'a', InputOption::VALUE_NONE, 'Stop all daemons', false)
+            ->addOption('pattern', 'p', InputOption::VALUE_OPTIONAL, 'The pattern to match daemons', null)
+            ->addOption('id', 'i', InputOption::VALUE_OPTIONAL, 'The daemon id', null)
+            ->addOption('timeout', 't', InputOption::VALUE_OPTIONAL, 'The timeout before sending next signal', 10)
+            ->addOption('signal', 's', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'The signal to send', [15, 2]);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $all = $input->getOption('all');
+        $pattern = $input->getOption('pattern');
         $id = $input->getOption('id');
+        $timeout = $input->getOption('timeout');
+        $signals = $input->getOption('signal');
+
+        if (!is_numeric($timeout)) {
+            throw new RuntimeException('Timeout must be numeric.');
+        }
+
+        $timeout = (int)$timeout;
+
+        UnmanagedPid::validateSignals($signals);
 
         if ($all && $id) {
             throw new RuntimeException('You cannot use --all and --id at the same time.');
@@ -47,10 +62,18 @@ final class DaemonStopCommand extends Command
             throw new RuntimeException('You must use --all or --id.');
         }
 
+        if ($id && $pattern) {
+            throw new RuntimeException('You cannot use --id and --pattern at the same time.');
+        }
+
+        if($pattern) {
+            $pattern = sprintf("/%s/i", preg_quote($pattern, '/'));
+        }
+
         if ($all) {
-            $this->daemonManager->stopAll();
+            $this->daemonManager->stopAll($pattern, $timeout, $signals);
         } else {
-            $this->daemonManager->stop($id);
+            $this->daemonManager->stop($id, $timeout, $signals);
         }
 
         return Command::SUCCESS;
