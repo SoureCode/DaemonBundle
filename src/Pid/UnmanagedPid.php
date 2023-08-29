@@ -42,7 +42,7 @@ class UnmanagedPid
      *
      * @param int $timeout Timeout in seconds before sending the next signal.
      * @param array|null $signals Ordered list of signals to send.
-     * @return void
+     * @return bool true if the process is stopped, false otherwise.
      */
     public function gracefullyStop(int $timeout = 10, ?array $signals = null): bool
     {
@@ -63,6 +63,10 @@ class UnmanagedPid
             if ($signal < 1) {
                 throw new \InvalidArgumentException(sprintf('Signal must be greater than 0, got "%s".', $signal));
             }
+
+            if ($signal > 64) {
+                throw new \InvalidArgumentException(sprintf('Signal must be lower than 65, got "%s".', $signal));
+            }
         }
 
         foreach ($signals as $signal) {
@@ -76,8 +80,8 @@ class UnmanagedPid
             }
         }
 
-        // Now we hope that the process is dead, but we cannot be sure, so we assume it failed to stop.
-        return false;
+        // Now we hope that the process is dead, but we cannot be sure, so we create a last check and return the result.
+        return !$this->isRunning();
     }
 
     public function isRunning(): bool
