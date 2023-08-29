@@ -31,20 +31,20 @@ final class DaemonStopCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('all', 'a', InputOption::VALUE_NONE, 'Stop all daemons', false)
-            ->addOption('pattern', 'p', InputOption::VALUE_OPTIONAL, 'The pattern to match daemons', null)
-            ->addOption('id', 'i', InputOption::VALUE_OPTIONAL, 'The daemon id', null)
-            ->addOption('timeout', 't', InputOption::VALUE_OPTIONAL, 'The timeout before sending next signal', 10)
-            ->addOption('signal', 's', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'The signal to send', [15, 2]);
+            ->addOption('all', 'a', InputOption::VALUE_NONE, 'Stop all daemons')
+            ->addOption('pattern', 'p', InputOption::VALUE_OPTIONAL, 'The pattern to match daemons')
+            ->addOption('id', 'i', InputOption::VALUE_OPTIONAL, 'The daemon id')
+            ->addOption('timeout', 't', InputOption::VALUE_OPTIONAL, 'The timeout before sending next signal')
+            ->addOption('signal', 's', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'The signal to send');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $all = $input->getOption('all');
-        $pattern = $input->getOption('pattern');
+        $pattern = $input->getOption('pattern') ?? null;
         $id = $input->getOption('id');
-        $timeout = $input->getOption('timeout');
-        $signals = $input->getOption('signal');
+        $timeout = $input->getOption('timeout') ?? 10;
+        $signals = $input->getOption('signal') ?? null;
 
         if (!is_numeric($timeout)) {
             throw new RuntimeException('Timeout must be numeric.');
