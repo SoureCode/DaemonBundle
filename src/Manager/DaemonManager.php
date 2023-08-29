@@ -5,6 +5,7 @@ namespace SoureCode\Bundle\Daemon\Manager;
 use Psr\Log\LoggerInterface;
 use SoureCode\Bundle\Daemon\Command\DaemonCommand;
 use SoureCode\Bundle\Daemon\Pid\ManagedPid;
+use SoureCode\Bundle\Daemon\Time;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Finder\Finder;
@@ -28,7 +29,11 @@ class DaemonManager
     private string $tmpDirectory;
     private Filesystem $filesystem;
     private LoggerInterface $logger;
+    /**
+     * @var int Delay in microseconds between checks.
+     */
     private int $checkDelay;
+    private int $checkTimeout;
 
     public function __construct(
         LoggerInterface $logger,
@@ -37,6 +42,7 @@ class DaemonManager
         string          $pidDirectory,
         string          $tmpDirectory,
         int             $checkDelay,
+        int             $checkTimeout,
     )
     {
         $this->logger = $logger;
@@ -45,6 +51,7 @@ class DaemonManager
         $this->pidDirectory = $pidDirectory;
         $this->tmpDirectory = $tmpDirectory;
         $this->checkDelay = $checkDelay;
+        $this->checkTimeout = $checkTimeout;
     }
 
     public function start(string $id, string $processCommand): bool
@@ -102,9 +109,9 @@ class DaemonManager
 
             shell_exec($shellCommand);
 
-            sleep($this->checkDelay);
-
-            $pid->reload();
+            $this->doCheck(function () use ($pid) {
+                return $pid->isRunning();
+            });
 
             $bashLog = trim(file_get_contents($bashLogFile));
             $commandLog = trim(file_get_contents($commandLogFile));
@@ -339,5 +346,19 @@ class DaemonManager
 
         return false;
 
+    }
+
+    private function doCheck(\Closure $param): void
+    {
+        $timeoutInMicroseconds = $this->checkTimeout * 1000 * 1000;
+        $iterations = (int)($timeoutInMicroseconds / $this->checkDelay);
+
+        for ($i = 0; $i < $iterations; $i++) {
+            if ($param()) {
+                return;
+            }
+
+            usleep($this->checkDelay);
+        }
     }
 }

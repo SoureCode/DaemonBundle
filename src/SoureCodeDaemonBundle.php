@@ -32,15 +32,28 @@ class SoureCodeDaemonBundle extends AbstractBundle
                     ->info('The directory where the tmp files are stored.')
                 ->end()
                 ->scalarNode('check_delay')
-                    ->defaultValue(2)
-                    ->info('The delay between starting daemon and checking if the daemon is really running and doesn\'t contain any errors.')
+                    ->defaultValue(10 * 1000) // 10ms
+                    ->info('Time in microseconds between checks.')
                     ->validate()
                         ->ifTrue(fn($value) => !is_int($value))
                         ->thenInvalid('The check delay must be an integer.')
                         ->ifTrue(fn($value) => $value < 1)
                         ->thenInvalid('The check delay must be greater than 0.')
+                        ->ifTrue(fn($value) => $value > 9 * 1000 * 1000) // 10s
+                        ->thenInvalid('Wtf are you doing? Waiting more than 9 seconds for a process to start? Really?')
                     ->end()
                 ->end()
+                ->scalarNode('check_timeout')
+                    ->defaultValue(5)
+                    ->info('Time in seconds after which the process is considered not started.')
+                    ->validate()
+                        ->ifTrue(fn($value) => !is_int($value))
+                        ->thenInvalid('The check delay must be an integer.')
+                        ->ifTrue(fn($value) => $value < 1)
+                        ->thenInvalid('The check delay must be greater than 0.')
+                        ->ifTrue(fn($value) => $value > 10)
+                        ->thenInvalid('Wtf are you doing? Waiting more than 10 seconds for a process to start? Really?')
+                    ->end()
             ->end();
         // @formatter:on
     }
@@ -50,7 +63,9 @@ class SoureCodeDaemonBundle extends AbstractBundle
         $container->parameters()
             ->set('soure_code_daemon.pid_directory', $config['pid_directory'])
             ->set('soure_code_daemon.tmp_directory', $config['tmp_directory'])
-            ->set('soure_code_daemon.check_delay', $config['check_delay']);
+            ->set('soure_code_daemon.check_delay', $config['check_delay'])
+            ->set('soure_code_daemon.check_timeout', $config['check_timeout'])
+        ;
 
         $services = $container->services();
 
@@ -62,6 +77,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
                 param('soure_code_daemon.pid_directory'),
                 param('soure_code_daemon.tmp_directory'),
                 param('soure_code_daemon.check_delay'),
+                param('soure_code_daemon.check_timeout'),
             ]);
 
         $services->alias(DaemonManager::class, 'soure_code_daemon.daemon_manager')

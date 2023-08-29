@@ -133,7 +133,13 @@ class ManagedPid implements Stringable
 
     public function isRunning(): bool
     {
-        return $this->sendSignal(0);
+        $this->reload();
+
+        if (null === $this->pid) {
+            return false;
+        }
+
+        return $this->pid->isRunning();
     }
 
     public function sendSignal(int $signal): bool

@@ -78,7 +78,7 @@ class UnmanagedPid
             return false;
         }
 
-        return $this->sendSignal(0);
+        return posix_getpgid($this->value) !== false;
     }
 
     public function sendSignal(int $signal): bool
@@ -92,6 +92,7 @@ class UnmanagedPid
 
     private function wait(int $timeout = 10): bool
     {
+        // Check every 10 milliseconds.
         $milliseconds = 10;
         $microseconds = $milliseconds * 1000;
         $iterations = $timeout / ($milliseconds / 1000);
