@@ -56,7 +56,9 @@ final class DaemonStopCommand extends Command
 
         $timeout = (int)$timeout;
 
-        UnmanagedPid::validateSignals($signals);
+        if (null !== $signals) {
+            UnmanagedPid::validateSignals($signals);
+        }
 
         if ($all && $id) {
             throw new RuntimeException('You cannot use --all and --id at the same time.');
