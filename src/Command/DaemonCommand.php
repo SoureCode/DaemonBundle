@@ -34,7 +34,6 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
     private ?string $processCommand = null;
     private ?ManagedPid $pid = null;
     private ?Process $process = null;
-    private bool $autoRestart = true;
 
     public function __construct(
         LoggerInterface $logger,
@@ -147,7 +146,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $id = $input->getOption('id');
-        $this->autoRestart = $input->getOption('auto-restart');
+        $autoRestart = $input->getOption('auto-restart');
         $processCommand = $input->getArgument('process');
 
         if (is_array($processCommand)) {
@@ -187,7 +186,7 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
                     ...$this->getContext(),
                 ]);
 
-                if (!$this->autoRestart) {
+                if (!$autoRestart) {
                     $this->shouldExit = true;
                     continue;
                 }
