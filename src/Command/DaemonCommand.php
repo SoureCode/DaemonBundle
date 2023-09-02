@@ -15,12 +15,14 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Process\Process;
 
 #[AsCommand(
     name: 'daemon',
     description: 'This command is the daemon supervisor',
 )]
+#[Autoconfigure(tags: ['monolog.logger' => 'daemon'])]
 final class DaemonCommand extends Command implements SignalableCommandInterface
 {
     private LoggerInterface $logger;
@@ -220,10 +222,34 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
         $stderr = $output instanceof ConsoleOutput ? $output->getErrorOutput() : $output;
 
         $this->process->start(function ($type, $buffer) use ($stdout, $stderr) {
+            $lines = preg_split('/\r\n|\r|\n/', $buffer);
+
             if (Process::ERR === $type) {
                 $stderr->write($buffer);
+
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (empty($line)) {
+                        continue;
+                    }
+                    $this->logger->debug($line, [
+                        'channel' => 'stderr',
+                        ...$this->getContext()
+                    ]);
+                }
             } else {
                 $stdout->write($buffer);
+
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (empty($line)) {
+                        continue;
+                    }
+                    $this->logger->debug($line, [
+                        'channel' => 'stdout',
+                        ...$this->getContext()
+                    ]);
+                }
             }
         });
 

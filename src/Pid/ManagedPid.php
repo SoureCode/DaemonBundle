@@ -185,11 +185,11 @@ class ManagedPid implements Stringable
     }
 
     /**
-     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param int|null $timeout Timeout in seconds before sending the next signal.
      * @param array|null $signals Ordered list of signals to send.
      * @return bool true if the process is stopped, false otherwise.
      */
-    public function stop(int $timeout = 10, ?array $signals = null): bool
+    public function stop(?int $timeout = null, ?array $signals = null): bool
     {
         $this->reload();
 
@@ -230,7 +230,7 @@ class ManagedPid implements Stringable
         $value = $this->pid->getValue();
 
         if (null === $value) {
-            return 'pid("' . $this->id . '", null)';
+            return 'dpid("' . $this->id . '", null)';
         }
 
         return 'dpid("' . $this->id . '", ' . $value . ')';

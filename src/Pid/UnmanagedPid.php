@@ -12,6 +12,8 @@ class UnmanagedPid
         9, // SIGKILL
     ];
 
+    public static int $defaultTimeout = 5;
+
     /**
      * The process id.
      */
@@ -40,15 +42,19 @@ class UnmanagedPid
     /**
      * Sends multiple signals to the process to stop it gracefully.
      *
-     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param int|null $timeout Timeout in seconds before sending the next signal.
      * @param array|null $signals Ordered list of signals to send.
      * @return bool true if the process is stopped, false otherwise.
      */
-    public function gracefullyStop(int $timeout = 10, ?array $signals = null): bool
+    public function gracefullyStop(?int $timeout = null, ?array $signals = null): bool
     {
         if (!$this->isRunning()) {
             $this->value = null;
             return true;
+        }
+
+        if (null === $timeout) {
+            $timeout = self::$defaultTimeout;
         }
 
         if (null === $signals) {

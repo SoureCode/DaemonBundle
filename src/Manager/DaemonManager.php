@@ -5,7 +5,7 @@ namespace SoureCode\Bundle\Daemon\Manager;
 use Psr\Log\LoggerInterface;
 use SoureCode\Bundle\Daemon\Command\DaemonCommand;
 use SoureCode\Bundle\Daemon\Pid\ManagedPid;
-use SoureCode\Bundle\Daemon\Time;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Finder\Finder;
@@ -13,6 +13,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\PhpExecutableFinder;
 use const DIRECTORY_SEPARATOR;
 
+#[Autoconfigure(tags: ['monolog.logger' => 'daemon'])]
 class DaemonManager
 {
     private static array $errorKeywords = [
@@ -42,6 +43,11 @@ class DaemonManager
      */
     private int $logCheckDelay;
 
+    /**
+     * @var array<string, array{command: string, signals: list<int>|null, timeout: int|null}> List of daemons.
+     */
+    private array $daemons;
+
     public function __construct(
         LoggerInterface $logger,
         Filesystem      $filesystem,
@@ -51,6 +57,7 @@ class DaemonManager
         int             $checkDelay,
         int             $checkTimeout,
         int             $logCheckDelay,
+        array           $daemons,
     )
     {
         $this->logger = $logger;
@@ -61,10 +68,12 @@ class DaemonManager
         $this->checkDelay = $checkDelay;
         $this->checkTimeout = $checkTimeout;
         $this->logCheckDelay = $logCheckDelay;
+        $this->daemons = $daemons;
     }
 
-    public function start(string $id, string $processCommand): bool
+    public function start(string $id, ?string $processCommand = null): bool
     {
+        $processCommand = $this->resolveCommand($id, $processCommand);
         $command = $this->buildCommand($id, $processCommand);
 
         $pid = $this->pid($id);
@@ -256,11 +265,11 @@ class DaemonManager
 
     /**
      * @param string|null $idPattern Pattern to match the daemon id.
-     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param int|null $timeout Timeout in seconds before sending the next signal.
      * @param array|null $signals Ordered list of signals to send.
      * @return bool true if all daemons were stopped successfully
      */
-    public function stopAll(?string $idPattern = null, int $timeout = 10, ?array $signals = null): bool
+    public function stopAll(?string $idPattern = null, ?int $timeout = null, ?array $signals = null): bool
     {
         $this->logger->info('Stopping all daemons...', [
             'id_pattern' => $idPattern,
@@ -316,15 +325,22 @@ class DaemonManager
     }
 
     /**
-     * @param string $id Daemon id.
-     * @param int $timeout Timeout in seconds before sending the next signal.
+     * @param string|ManagedPid $pid
+     * @param int|null $timeout Timeout in seconds before sending the next signal.
      * @param array|null $signals Ordered list of signals to send.
      * @return bool true if the process is stopped, false otherwise.
      */
-    public function stop(string|ManagedPid $pid, int $timeout = 10, ?array $signals = null): bool
+    public function stop(string|ManagedPid $pid, ?int $timeout = null, ?array $signals = null): bool
     {
         if (is_string($pid)) {
             $pid = $this->pid($pid);
+        }
+
+        $id = $pid->getId();
+
+        if (isset($this->daemons[$id])) {
+            $timeout = $timeout ?? $this->daemons[$id]['timeout'] ?? null;
+            $signals = $signals ?? $this->daemons[$id]['signals'] ?? null;
         }
 
         $this->logger->info('Stopping daemon...', [
@@ -371,5 +387,18 @@ class DaemonManager
 
             usleep($this->checkDelay);
         }
+    }
+
+    private function resolveCommand(string $id, ?string $processCommand = null): string
+    {
+        if (null !== $processCommand) {
+            return $processCommand;
+        }
+
+        if (!array_key_exists($id, $this->daemons)) {
+            throw new \InvalidArgumentException(sprintf('Daemon with id "%s" not found.', $id));
+        }
+
+        return $this->daemons[$id]['command'];
     }
 }

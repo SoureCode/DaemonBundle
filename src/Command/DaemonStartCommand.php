@@ -9,11 +9,13 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 
 #[AsCommand(
     name: 'daemon:start',
     description: 'This command starts a daemon',
 )]
+#[Autoconfigure(tags: ['monolog.logger' => 'daemon'])]
 final class DaemonStartCommand extends Command
 {
     private DaemonManager $daemonManager;

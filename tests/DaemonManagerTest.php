@@ -116,4 +116,27 @@ class DaemonManagerTest extends AbstractBaseTest
             $daemonManager->stopAll(null, 1);
         }
     }
+
+    public function testPredefinedDaemons(): void
+    {
+        // Arrange
+        $container = self::getContainer();
+
+        /**
+         * @var DaemonManager $daemonManager
+         */
+        $daemonManager = $container->get(DaemonManager::class);
+
+        $started = $daemonManager->start("example");
+
+        $pid = $daemonManager->pid("example");
+
+        try {
+            $this->assertTrue($started);
+            sleep(2);
+            $this->assertTrue($pid->isRunning());
+        } finally {
+            $daemonManager->stop($pid, 1);
+        }
+    }
 }

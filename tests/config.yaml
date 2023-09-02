@@ -10,3 +10,7 @@ monolog:
       path: '%kernel.project_dir%/var/logs/debug.log'
       level: debug
       formatter: monolog.formatter.line
+soure_code_daemon:
+  daemons:
+    example:
+      command: '%kernel.project_dir%/daemons/long-running.sh'
