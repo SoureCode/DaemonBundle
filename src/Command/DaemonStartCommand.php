@@ -45,6 +45,10 @@ final class DaemonStartCommand extends Command
             $command = implode(" ", $command);
         }
 
+        if (empty($command)) {
+            $command = null;
+        }
+
         $started = $this->daemonManager->start($id, $command);
 
         if ($started) {
