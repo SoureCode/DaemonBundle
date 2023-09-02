@@ -45,18 +45,21 @@ final class DaemonStopCommand extends Command
         $all = $input->getOption('all');
         $pattern = $input->getOption('pattern') ?? null;
         $id = $input->getOption('id');
-        $timeout = $input->getOption('timeout') ?? 10;
+        $timeout = $input->getOption('timeout') ?? null;
         $signals = $input->getOption('signal') ?? null;
 
         if (empty($signals)) {
             $signals = null;
         }
 
-        if (!is_numeric($timeout)) {
-            throw new RuntimeException('Timeout must be numeric.');
+        if ($timeout !== null) {
+            if (!is_numeric($timeout)) {
+                throw new RuntimeException('Timeout must be numeric.');
+            }
+
+            $timeout = (int)$timeout;
         }
 
-        $timeout = (int)$timeout;
 
         if (null !== $signals) {
             UnmanagedPid::validateSignals($signals);
