@@ -33,7 +33,7 @@ final class DaemonStartCommand extends Command
     {
         $this
             ->addOption('id', 'i', InputOption::VALUE_REQUIRED, 'The command id')
-            ->addArgument('process', InputArgument::REQUIRED | InputArgument::IS_ARRAY, 'The process to run');
+            ->addArgument('process', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'The process to run');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
