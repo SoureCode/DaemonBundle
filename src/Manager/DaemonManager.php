@@ -259,7 +259,10 @@ class DaemonManager
     public static function findBinary(string $binary): ?string
     {
         return (new ExecutableFinder())
-            ->find($binary);
+            ->find($binary, null, [
+                '/usr/bin',
+                '/bin',
+            ]);
     }
 
     private function doCheck(Closure $param): void
