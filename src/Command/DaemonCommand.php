@@ -5,6 +5,7 @@ namespace SoureCode\Bundle\Daemon\Command;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
+use SoureCode\Bundle\Daemon\Manager\DaemonManager;
 use SoureCode\Bundle\Daemon\Pid\ManagedPid;
 use SoureCode\Bundle\Daemon\Pid\UnmanagedPid;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -209,8 +210,11 @@ final class DaemonCommand extends Command implements SignalableCommandInterface
 
     private function runProcess(OutputInterface $output): int
     {
+        $bashBinary = DaemonManager::findBinary('bash');
+        $command = sprintf('%s -c %s', $bashBinary, DaemonManager::escape($this->processCommand));
+
         $this->process = Process::fromShellCommandline(
-            $this->processCommand,
+            $command,
             $this->projectDirectory,
             null,
             null,

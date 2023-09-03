@@ -108,8 +108,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
             ->set('soure_code_daemon.check_delay', $config['check_delay'])
             ->set('soure_code_daemon.check_timeout', $config['check_timeout'])
             ->set('soure_code_daemon.log_check_delay', $config['log_check_delay'])
-            ->set('soure_code_daemon.daemons', $config['daemons'])
-        ;
+            ->set('soure_code_daemon.daemons', $config['daemons']);
 
         $services = $container->services();
 

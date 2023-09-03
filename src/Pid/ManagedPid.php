@@ -142,6 +142,11 @@ class ManagedPid implements Stringable
         return $this->pid->isRunning();
     }
 
+    public function reload(): void
+    {
+        $this->init(null);
+    }
+
     public function sendSignal(int $signal): bool
     {
         $this->reload();
@@ -151,11 +156,6 @@ class ManagedPid implements Stringable
         }
 
         return $this->pid->sendSignal($signal);
-    }
-
-    public function reload(): void
-    {
-        $this->init(null);
     }
 
     public function dumpExitFile(): void

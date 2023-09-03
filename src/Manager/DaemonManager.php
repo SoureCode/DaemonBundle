@@ -2,6 +2,8 @@
 
 namespace SoureCode\Bundle\Daemon\Manager;
 
+use Closure;
+use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use SoureCode\Bundle\Daemon\Command\DaemonCommand;
 use SoureCode\Bundle\Daemon\Pid\ManagedPid;
@@ -95,7 +97,7 @@ class DaemonManager
         $bashLogFile = $this->filesystem->tempnam($this->tmpDirectory, $pid->getHash(), '_command.log');
 
         try {
-            $bashBinary = $this->findBinary('bash');
+            $bashBinary = self::findBinary('bash');
 
             $bashCommand = [
                 $bashBinary,
@@ -181,6 +183,19 @@ class DaemonManager
         }
     }
 
+    private function resolveCommand(string $id, ?string $processCommand = null): string
+    {
+        if (null !== $processCommand) {
+            return $processCommand;
+        }
+
+        if (!array_key_exists($id, $this->daemons)) {
+            throw new InvalidArgumentException(sprintf('Daemon with id "%s" not found.', $id));
+        }
+
+        return $this->daemons[$id]['command'];
+    }
+
     private function buildCommand(string $id, string $processCommand): string
     {
         $command = $this->getPhpBinary();
@@ -241,10 +256,29 @@ class DaemonManager
         return new ManagedPid($this->pidDirectory, $id, $value);
     }
 
-    private function findBinary(string $binary): ?string
+    public static function findBinary(string $binary): ?string
     {
         return (new ExecutableFinder())
             ->find($binary);
+    }
+
+    private function doCheck(Closure $param): void
+    {
+        $timeoutInMicroseconds = $this->checkTimeout * 1000 * 1000;
+        $iterations = (int)($timeoutInMicroseconds / $this->checkDelay);
+
+        for ($i = 0; $i < $iterations; $i++) {
+            if ($param()) {
+                return;
+            }
+
+            usleep($this->checkDelay);
+        }
+    }
+
+    public function isRunning(string $id): bool
+    {
+        return $this->pid($id)->isRunning();
     }
 
     private function containsKeyword(string $log): bool
@@ -256,11 +290,6 @@ class DaemonManager
         }
 
         return false;
-    }
-
-    public function isRunning(string $id): bool
-    {
-        return $this->pid($id)->isRunning();
     }
 
     /**
@@ -373,32 +402,5 @@ class DaemonManager
 
         return false;
 
-    }
-
-    private function doCheck(\Closure $param): void
-    {
-        $timeoutInMicroseconds = $this->checkTimeout * 1000 * 1000;
-        $iterations = (int)($timeoutInMicroseconds / $this->checkDelay);
-
-        for ($i = 0; $i < $iterations; $i++) {
-            if ($param()) {
-                return;
-            }
-
-            usleep($this->checkDelay);
-        }
-    }
-
-    private function resolveCommand(string $id, ?string $processCommand = null): string
-    {
-        if (null !== $processCommand) {
-            return $processCommand;
-        }
-
-        if (!array_key_exists($id, $this->daemons)) {
-            throw new \InvalidArgumentException(sprintf('Daemon with id "%s" not found.', $id));
-        }
-
-        return $this->daemons[$id]['command'];
     }
 }

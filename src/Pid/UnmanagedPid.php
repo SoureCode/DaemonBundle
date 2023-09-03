@@ -2,6 +2,7 @@
 
 namespace SoureCode\Bundle\Daemon\Pid;
 
+use InvalidArgumentException;
 use Symfony\Component\Process\Process;
 
 class UnmanagedPid
@@ -87,6 +88,23 @@ class UnmanagedPid
         return posix_getpgid($this->value) !== false;
     }
 
+    public static function validateSignals(array $signals): void
+    {
+        foreach ($signals as $signal) {
+            if (!is_int($signal)) {
+                throw new InvalidArgumentException(sprintf('Signal must be an integer, got "%s".', gettype($signal)));
+            }
+
+            if ($signal < 1) {
+                throw new InvalidArgumentException(sprintf('Signal must be greater than 0, got "%s".', $signal));
+            }
+
+            if ($signal > 64) {
+                throw new InvalidArgumentException(sprintf('Signal must be lower than 65, got "%s".', $signal));
+            }
+        }
+    }
+
     public function sendSignal(int $signal): bool
     {
         if (null === $this->value) {
@@ -112,22 +130,5 @@ class UnmanagedPid
         }
 
         return false;
-    }
-
-    public static function validateSignals(array $signals): void
-    {
-        foreach ($signals as $signal) {
-            if (!is_int($signal)) {
-                throw new \InvalidArgumentException(sprintf('Signal must be an integer, got "%s".', gettype($signal)));
-            }
-
-            if ($signal < 1) {
-                throw new \InvalidArgumentException(sprintf('Signal must be greater than 0, got "%s".', $signal));
-            }
-
-            if ($signal > 64) {
-                throw new \InvalidArgumentException(sprintf('Signal must be lower than 65, got "%s".', $signal));
-            }
-        }
     }
 }
