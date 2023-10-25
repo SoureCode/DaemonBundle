@@ -2,12 +2,9 @@
 
 namespace SoureCode\Bundle\Daemon\Tests;
 
-use Monolog\Handler\TestHandler;
-use Monolog\LogRecord;
 use Nyholm\BundleTest\TestKernel;
 use SoureCode\Bundle\Daemon\SoureCodeDaemonBundle;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Symfony\Bundle\MonologBundle\MonologBundle;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\HttpKernel\KernelInterface;
 
@@ -24,7 +21,6 @@ abstract class AbstractBaseTest extends KernelTestCase
          * @var TestKernel $kernel
          */
         $kernel = parent::createKernel($options);
-        $kernel->addTestBundle(MonologBundle::class);
         $kernel->addTestBundle(SoureCodeDaemonBundle::class);
         $kernel->setTestProjectDir(__DIR__);
         $kernel->addTestConfig(Path::join(__DIR__, 'config.yaml'));
@@ -58,30 +54,5 @@ abstract class AbstractBaseTest extends KernelTestCase
         $processList = implode(PHP_EOL, $processes);
 
         $this->assertStringNotContainsString($process, $processList);
-    }
-
-    protected function getTestHandler(): TestHandler
-    {
-        return self::getContainer()->get('monolog.handler.testing');
-    }
-
-    protected function hasRecordThatMatches(string $pattern): bool
-    {
-        $testHandler = $this->getTestHandler();
-
-        $records = array_map(
-            static fn(LogRecord $record) => $record->formatted,
-            $testHandler->getRecords()
-        );
-
-        $pattern = preg_quote($pattern, '/');
-
-        foreach ($records as $record) {
-            if (preg_match('/' . $pattern . '/im', $record)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

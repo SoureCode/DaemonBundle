@@ -2,408 +2,119 @@
 
 namespace SoureCode\Bundle\Daemon\Manager;
 
-use Closure;
 use InvalidArgumentException;
-use Psr\Log\LoggerInterface;
-use SoureCode\Bundle\Daemon\Command\DaemonCommand;
-use SoureCode\Bundle\Daemon\Pid\ManagedPid;
+use SoureCode\Bundle\Daemon\Adapter\AdapterInterface;
+use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
-use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Finder\Finder;
-use Symfony\Component\Process\ExecutableFinder;
-use Symfony\Component\Process\PhpExecutableFinder;
 use const DIRECTORY_SEPARATOR;
 
 #[Autoconfigure(tags: ['monolog.logger' => 'daemon'])]
 class DaemonManager
 {
-    private static array $errorKeywords = [
-        // Error from logger
-        "[ERROR]",
-        // PHP Fatal error
-        "PHP Fatal error",
-        // Any Exception
-        "Exception",
-    ];
+    /**
+     * @var array<string, ServiceInterface>|null
+     */
+    private ?array $services = null;
 
-    private string $pidDirectory;
-    private string $projectDirectory;
-    private string $tmpDirectory;
-    private Filesystem $filesystem;
-    private LoggerInterface $logger;
-    /**
-     * @var int Delay in microseconds between checks.
-     */
-    private int $checkDelay;
-    /**
-     * @var int Time in seconds after which the process is considered not started
-     */
-    private int $checkTimeout;
-    /**
-     * @var int Time in microseconds to wait before checking logs and if it is still running.
-     */
-    private int $logCheckDelay;
-
-    /**
-     * @var array<string, array{command: string, signals: list<int>|null, timeout: int|null}> List of daemons.
-     */
-    private array $daemons;
 
     public function __construct(
-        LoggerInterface $logger,
-        Filesystem      $filesystem,
-        string          $projectDirectory,
-        string          $pidDirectory,
-        string          $tmpDirectory,
-        int             $checkDelay,
-        int             $checkTimeout,
-        int             $logCheckDelay,
-        array           $daemons,
+        private readonly AdapterInterface $adapter,
+        private readonly string           $serviceDirectory,
     )
     {
-        $this->logger = $logger;
-        $this->filesystem = $filesystem;
-        $this->projectDirectory = $projectDirectory;
-        $this->pidDirectory = $pidDirectory;
-        $this->tmpDirectory = $tmpDirectory;
-        $this->checkDelay = $checkDelay;
-        $this->checkTimeout = $checkTimeout;
-        $this->logCheckDelay = $logCheckDelay;
-        $this->daemons = $daemons;
     }
 
-    public function start(string $id, ?string $processCommand = null): bool
+    public function start(string|ServiceInterface $service): void
     {
-        $processCommand = $this->resolveCommand($id, $processCommand);
-        $command = $this->buildCommand($id, $processCommand);
-
-        $pid = $this->pid($id);
-
-        if ($pid->exists()) {
-            $this->logger->info('Daemon already running.', [
-                'pid' => (string)$pid,
-                'command' => $processCommand,
-            ]);
-
-            return false;
+        if (is_string($service)) {
+            $service = $this->getService($service);
         }
 
-        if (!$this->filesystem->exists($this->tmpDirectory)) {
-            $this->filesystem->mkdir($this->tmpDirectory);
+        $this->adapter->start($service);
+    }
+
+    public function isRunning(string|ServiceInterface $service): bool
+    {
+        if (is_string($service)) {
+            $service = $this->getService($service);
         }
 
-        $commandLogFile = $this->filesystem->tempnam($this->tmpDirectory, $pid->getHash(), '_bash.log');
-        $bashLogFile = $this->filesystem->tempnam($this->tmpDirectory, $pid->getHash(), '_command.log');
+        return $this->adapter->isRunning($service);
+    }
 
-        try {
-            $bashBinary = self::findBinary('bash');
 
-            $bashCommand = [
-                $bashBinary,
-                '-c',
-                self::escape($command),
-                ">",
-                $commandLogFile,
-                "2>&1",
-                "&",
-                "disown",
-                '$!',
-            ];
-
-            $bashCommand = implode(" ", $bashCommand);
-
-            $shellCommand = implode(" ", [
-                $bashBinary,
-                '-c',
-                self::escape($bashCommand),
-                ">",
-                $bashLogFile,
-                "2>&1",
-            ]);
-
-            $this->logger->info('Starting daemon...', [
-                'pid' => (string)$pid,
-                'command' => $processCommand,
-            ]);
-
-            shell_exec($shellCommand);
-
-            $this->doCheck(function () use ($pid) {
-                return $pid->isRunning();
-            });
-
-            usleep($this->logCheckDelay);
-
-            $bashLog = trim(file_get_contents($bashLogFile));
-            $commandLog = trim(file_get_contents($commandLogFile));
-
-            if ($bashLog !== '') {
-                $this->logger->error('Daemon bash contains output.', [
-                    'pid' => (string)$pid,
-                    'command' => $processCommand,
-                    'bash_log' => $bashLog,
-                ]);
-
-                return false;
+    public function stopAll(?string $pattern = null): void
+    {
+        foreach ($this->getServiceNames() as $name) {
+            if (null !== $pattern && !str_contains($name, $pattern)) {
+                continue;
             }
 
-            if ('' !== $commandLog) {
-                if ($this->containsKeyword($commandLog)) {
-                    $this->logger->error('Daemon command output contains error keyword.', [
-                        'pid' => (string)$pid,
-                        'command' => $processCommand,
-                        'command_log' => $commandLog,
-                    ]);
+            $this->stop($name);
+        }
+    }
 
-                    return false;
+    public function stop(string|ServiceInterface $service): void
+    {
+        if (is_string($service)) {
+            $service = $this->getService($service);
+        }
+
+        $this->adapter->stop($service);
+    }
+
+    /**
+     * @return array<string, ServiceInterface>
+     */
+    public function getServices(): array
+    {
+        if (null === $this->services) {
+            $finder = new Finder();
+
+            $finder->files()
+                ->in($this->serviceDirectory)
+                ->name('*.{service,plist}');
+
+            $serviceFiles = $finder->getIterator();
+            $services = [];
+
+            foreach ($serviceFiles as $serviceFile) {
+                if (true === $this->adapter->supports($serviceFile)) {
+                    $relativePath = $serviceFile->getRelativePath();
+                    $relativePath = str_replace(DIRECTORY_SEPARATOR, '.', $relativePath);
+
+                    $name = $relativePath . '.' . $serviceFile->getBasename('.' . $serviceFile->getExtension());
+                    $name = ltrim($name, '.');
+
+                    $services[$name] = $this->adapter->createService($name, $serviceFile);
                 }
             }
 
-            if (!$pid->isRunning()) {
-                $this->logger->error('Daemon crashed after start.', [
-                    'pid' => (string)$pid,
-                    'command' => $processCommand,
-                    'bash_log' => $bashLog,
-                    'command_log' => $commandLog,
-                ]);
+            ksort($services);
 
-                return false;
-            }
-
-            $this->logger->info('Daemon started.', [
-                'pid' => (string)$pid,
-                'command' => $processCommand,
-            ]);
-
-            return true;
-        } finally {
-            $this->filesystem->remove($commandLogFile);
-            $this->filesystem->remove($bashLogFile);
-        }
-    }
-
-    private function resolveCommand(string $id, ?string $processCommand = null): string
-    {
-        if (null !== $processCommand) {
-            return $processCommand;
+            $this->services = $services;
         }
 
-        if (!array_key_exists($id, $this->daemons)) {
-            throw new InvalidArgumentException(sprintf('Daemon with id "%s" not found.', $id));
-        }
-
-        return $this->daemons[$id]['command'];
-    }
-
-    private function buildCommand(string $id, string $processCommand): string
-    {
-        $command = $this->getPhpBinary();
-        $command[] = $this->getConsolePath();
-        $command[] = DaemonCommand::getDefaultName();
-        $command[] = '--id';
-        $command[] = $id;
-        $command[] = self::escape($processCommand);
-
-        return implode(" ", $command);
-    }
-
-    private function getPhpBinary(): ?array
-    {
-        $executableFinder = new PhpExecutableFinder();
-        $php = $executableFinder->find(false);
-
-        if (false === $php) {
-            return null;
-        }
-
-        return array_merge([$php], $executableFinder->findArguments());
-    }
-
-    private function getConsolePath(): string
-    {
-        return Path::join($this->projectDirectory, 'bin', 'console');
+        return $this->services;
     }
 
     /**
-     * @copyright symfony/process - https://github.com/symfony/process
+     * @return list<string>
      */
-    public static function escape(string $argument): string
+    public function getServiceNames(): array
     {
-        if ('' === $argument || null === $argument) {
-            return '""';
-        }
-
-        if ('\\' !== DIRECTORY_SEPARATOR) {
-            return "'" . str_replace("'", "'\\''", $argument) . "'";
-        }
-
-        if (str_contains($argument, "\0")) {
-            $argument = str_replace("\0", '?', $argument);
-        }
-
-        if (!preg_match('/[\/()%!^"<>&|\s]/', $argument)) {
-            return $argument;
-        }
-
-        $argument = preg_replace('/(\\\\+)$/', '$1$1', $argument);
-
-        return '"' . str_replace(['"', '^', '%', '!', "\n"], ['""', '"^^"', '"^%"', '"^!"', '!LF!'], $argument) . '"';
+        return array_keys($this->getServices());
     }
 
-    public function pid(string $id, ?int $value = null): ManagedPid
+    public function getService(string $name): ServiceInterface
     {
-        return new ManagedPid($this->pidDirectory, $id, $value);
-    }
+        $services = $this->getServices();
 
-    public static function findBinary(string $binary): ?string
-    {
-        return (new ExecutableFinder())
-            ->find($binary, null, [
-                '/usr/bin',
-                '/bin',
-            ]);
-    }
-
-    private function doCheck(Closure $param): void
-    {
-        $timeoutInMicroseconds = $this->checkTimeout * 1000 * 1000;
-        $iterations = (int)($timeoutInMicroseconds / $this->checkDelay);
-
-        for ($i = 0; $i < $iterations; $i++) {
-            if ($param()) {
-                return;
-            }
-
-            usleep($this->checkDelay);
-        }
-    }
-
-    public function isRunning(string $id): bool
-    {
-        return $this->pid($id)->isRunning();
-    }
-
-    private function containsKeyword(string $log): bool
-    {
-        foreach (self::$errorKeywords as $keyword) {
-            if (str_contains($log, $keyword)) {
-                return true;
-            }
+        if (!array_key_exists($name, $services)) {
+            throw new InvalidArgumentException(sprintf('Service "%s" not found.', $name));
         }
 
-        return false;
-    }
-
-    /**
-     * @param string|null $idPattern Pattern to match the daemon id.
-     * @param int|null $timeout Timeout in seconds before sending the next signal.
-     * @param array|null $signals Ordered list of signals to send.
-     * @return bool true if all daemons were stopped successfully
-     */
-    public function stopAll(?string $idPattern = null, ?int $timeout = null, ?array $signals = null): bool
-    {
-        $this->logger->info('Stopping all daemons...', [
-            'id_pattern' => $idPattern,
-        ]);
-
-        $pidFiles = (new Finder())
-            ->files()
-            ->name('*.id') // by the id files NOT the pid files
-            ->in($this->pidDirectory);
-
-        $stopResults = [];
-
-        foreach ($pidFiles as $pidFile) {
-            $filePath = $pidFile->getRealPath();
-
-            if ($this->filesystem->exists($filePath) === false) {
-                continue;
-            }
-
-            $id = file_get_contents($filePath);
-
-            if (null !== $idPattern && !preg_match($idPattern, $id)) {
-                $this->logger->info('Skipping stop daemon...', [
-                    'id' => $id,
-                ]);
-                continue;
-            }
-
-            $pid = $this->pid($id);
-
-            $stopped = $this->stop($pid, $timeout, $signals);
-
-            if ($stopped) {
-                $pid->remove();
-            }
-
-            $stopResults[(string)$pid] = $stopped;
-        }
-
-        $allStopped = !in_array(false, $stopResults, true);
-
-        if ($allStopped) {
-            $this->logger->info('All daemons stopped.', [
-                'stop_results' => $stopResults,
-            ]);
-        } else {
-            $this->logger->error('Not all daemons stopped.', [
-                'stop_results' => $stopResults,
-            ]);
-        }
-
-        return $allStopped;
-    }
-
-    /**
-     * @param string|ManagedPid $pid
-     * @param int|null $timeout Timeout in seconds before sending the next signal.
-     * @param array|null $signals Ordered list of signals to send.
-     * @return bool true if the process is stopped, false otherwise.
-     */
-    public function stop(string|ManagedPid $pid, ?int $timeout = null, ?array $signals = null): bool
-    {
-        if (is_string($pid)) {
-            $pid = $this->pid($pid);
-        }
-
-        $id = $pid->getId();
-
-        if (isset($this->daemons[$id])) {
-            $timeout = $timeout ?? $this->daemons[$id]['timeout'] ?? null;
-            $signals = $signals ?? $this->daemons[$id]['signals'] ?? null;
-        }
-
-        $this->logger->info('Stopping daemon...', [
-            'pid' => (string)$pid,
-        ]);
-
-        if ($pid->isRunning()) {
-            $stopped = $pid->stop($timeout, $signals);
-
-            if (!$stopped) {
-                $this->logger->error('Daemon could not be stopped.', [
-                    'pid' => (string)$pid,
-                ]);
-
-                return false;
-            }
-
-            $this->logger->info('Daemon stopped.', [
-                'pid' => (string)$pid,
-            ]);
-
-            $pid->remove();
-
-            return true;
-        }
-
-        $this->logger->warning('Daemon not running.', [
-            'pid' => (string)$pid,
-        ]);
-
-        return false;
-
+        return $services[$name];
     }
 }
