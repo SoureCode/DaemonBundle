@@ -2,7 +2,9 @@
 # DaemonBundle
 
 DaemonBundle provides a set of commands to run daemons in the background.
-Especially useful for environments without a supervisor.
+It will use systemd or launchd to run the daemons.
+
+Windows is not supported yet.
 
 ## Resources
 
