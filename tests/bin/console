@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+
+use Nyholm\BundleTest\TestKernel;
+use SoureCode\Bundle\Daemon\SoureCodeDaemonBundle;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Filesystem\Path;
+
+require_once dirname(__DIR__) . '/../vendor/autoload.php';
+
+$kernel = new TestKernel('dev', true);
+$kernel->addTestBundle(SoureCodeDaemonBundle::class);
+$kernel->addTestConfig(Path::join(__DIR__, '..', 'config.yaml'));
+$kernel->setTestProjectDir(Path::join(__DIR__, '..'));
+
+$app = new Application($kernel);
+$app->run();

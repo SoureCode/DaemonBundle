@@ -8,13 +8,12 @@ Description:
   This command starts a daemon
 
 Usage:
-  daemon:start [options] [--] <process>...
+  daemon:start <name>...
 
 Arguments:
-  process               The process to run
+  name                  The name of the daemon
 
 Options:
-  -i, --id=ID           The command id
   -h, --help            Display help for the given command. When no command is given display help for the list command
   -q, --quiet           Do not output any message
   -V, --version         Display this application version

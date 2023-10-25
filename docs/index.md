@@ -5,12 +5,9 @@
 
 - PHP 8.2 or higher
 - Symfony 6.3 or higher
-- php-pcntl
-- php-posix
 
 ## Commands
 
-- [`daemon`](./daemon.md) - The daemon itself.
 - [`daemon:start`](./daemon-start.md) - Starts a daemon.
 - [`daemon:stop`](./daemon-stop.md) - Stop one or all daemons.
 
@@ -18,14 +15,10 @@
 
 ```shell
 # Start npm watch as a daemon
-$ symfony console daemon:start --id npm "npm run watch"
-
-# Start a worker as a daemon
-$ symfony console daemon:start --id worker1 "symfony console messenger:consume async"
-$ symfony console daemon:start --id worker2 "symfony console messenger:consume async_high"
+$ symfony console daemon:start npm
 
 # Stop a daemon
-$ symfony console daemon:stop --id npm
+$ symfony console daemon:stop npm
 
 # Stop all daemons
 $ symfony console daemon:stop --all
@@ -39,7 +32,7 @@ use SoureCode\Bundle\Daemon\Manager\DaemonManager;
 $daemonManager = $container->get(DaemonManager::class);
 
 // start npm watch as a daemon
-$daemonManager->start('npm', 'npm run watch');
+$daemonManager->start('npm');
 
 // stop npm watch daemon
 $daemonManager->stop('npm');

@@ -54,13 +54,17 @@ class SoureCodeDaemonBundle extends AbstractBundle
             ->args([
                 service('soure_code_daemon.daemon_manager'),
             ])
-            ->public();
+            ->public()
+            ->tag('console.command', ['command' => 'daemon:start'])
+        ;
 
         $services->set('soure_code_daemon.command.daemon.stop', DaemonStopCommand::class)
             ->args([
                 service('soure_code_daemon.daemon_manager'),
             ])
-            ->public();
+            ->public()
+            ->tag('console.command', ['command' => 'daemon:stop'])
+        ;
 
     }
 }

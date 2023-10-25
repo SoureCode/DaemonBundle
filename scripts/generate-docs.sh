@@ -7,8 +7,7 @@ TESTS_DIRECTORY="$PROJECT_DIRECTORY/tests"
 BIN_DIRECTORY="$TESTS_DIRECTORY/bin"
 CONSOLE="$BIN_DIRECTORY/console"
 
-COMMANDS="daemon
-daemon:start
+COMMANDS="daemon:start
 daemon:stop"
 
 NEWLINE=$'\n'
@@ -16,7 +15,7 @@ NEWLINE=$'\n'
 for COMMAND in $COMMANDS; do
   MD_FILE_NAME="$(echo "$COMMAND" | tr ':' '-')"
   MARKDOWN="${NEWLINE}# Command: ${COMMAND}${NEWLINE}${NEWLINE}## Usage${NEWLINE}${NEWLINE}\`\`\`shell${NEWLINE}"
-  USAGE="$("$CONSOLE" "$COMMAND" --help)"
+  USAGE="$("$CONSOLE" "$COMMAND" --help -vvv)"
   MARKDOWN="${MARKDOWN}${USAGE}${NEWLINE}\`\`\`${NEWLINE}${NEWLINE}"
 
   echo "$MARKDOWN" >"$DOCS_DIRECTORY/$MD_FILE_NAME.md"
