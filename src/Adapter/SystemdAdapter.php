@@ -203,8 +203,9 @@ class SystemdAdapter extends AbstractAdapter
 
     public function load(SystemdService $service): void
     {
+        // Unload if loaded to ensure that the service is loaded with the latest configuration.
         if ($this->isLoaded($service)) {
-            return;
+            $this->unload($service);
         }
 
         $serviceFile = $this->getServiceFile($service);

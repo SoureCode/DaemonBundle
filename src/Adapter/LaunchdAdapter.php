@@ -59,9 +59,21 @@ class LaunchdAdapter extends AbstractAdapter
             'dict' => $this->parseDict($child),
             'string' => (string)$child,
             'integer' => (int)$child,
+            'array' => $this->parseArray($child),
             'true' => true,
             'false' => false,
         };
+    }
+
+    private function parseArray(\SimpleXMLElement $child): array
+    {
+        $data = [];
+
+        foreach ($child->children() as $item) {
+            $data[] = $this->parseValue($item);
+        }
+
+        return $data;
     }
 
     public function supports(SplFileInfo $serviceFile): bool
@@ -121,8 +133,9 @@ class LaunchdAdapter extends AbstractAdapter
 
     public function load(LaunchdService $service): void
     {
+        // Unload if loaded to ensure that the service is loaded with the latest configuration.
         if ($this->isLoaded($service)) {
-            return;
+            $this->unload($service);
         }
 
         $this->launchctl('load', '-w', $service->getFilePath());
