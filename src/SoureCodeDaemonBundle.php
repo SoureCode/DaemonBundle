@@ -42,7 +42,11 @@ class SoureCodeDaemonBundle extends AbstractBundle
 
         $services = $container->services();
 
-        $services->set('soure_code_daemon.adapter.systemd', Adapter\SystemdAdapter::class);
+        $services->set('soure_code_daemon.adapter.systemd', Adapter\SystemdAdapter::class)
+            ->args([
+                service('filesystem'),
+            ]);
+
         $services->set('soure_code_daemon.adapter.launchd', Adapter\LaunchdAdapter::class);
 
         $adapter = $config['adapter'];
