@@ -6,6 +6,16 @@ use SoureCode\Bundle\Daemon\Manager\DaemonManager;
 
 class DaemonManagerTest extends AbstractBaseTest
 {
+    public function setUp(): void
+    {
+        AbstractBaseTest::setUpTemplates();
+    }
+
+    public function tearDown(): void
+    {
+        AbstractBaseTest::tearDownTemplates();
+    }
+
     public function testGetServices(): void
     {
         // Arrange
