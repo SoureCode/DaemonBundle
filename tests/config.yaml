@@ -2,4 +2,4 @@ framework:
   http_method_override: false
 soure_code_daemon:
   directory: '%kernel.project_dir%/services'
-  adapter: 'launchd'
+  adapter: 'auto'
