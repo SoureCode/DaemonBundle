@@ -7,7 +7,6 @@ class LaunchdService implements ServiceInterface
     public function __construct(
         private readonly string       $name,
         private readonly \SplFileInfo $file,
-        private readonly string       $contents,
         private readonly array        $config,
     )
     {

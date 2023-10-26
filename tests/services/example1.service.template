@@ -1,0 +1,13 @@
+[Unit]
+Description=Example long running bash script
+After=
+Wants=
+
+[Service]
+Restart=always
+Type=simple
+WorkingDirectory={PROJECT_DIRECTORY}
+ExecStart={PROJECT_DIRECTORY}tests/daemons/long-running.sh
+
+[Install]
+WantedBy=multi-user.target

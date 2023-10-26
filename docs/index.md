@@ -11,6 +11,18 @@
 - [`daemon:start`](./daemon-start.md) - Starts a daemon.
 - [`daemon:stop`](./daemon-stop.md) - Stop one or all daemons.
 
+## Notes
+
+If you are using the systemd service manager, ensure your user can run daemons after logout.
+
+> enable-linger [USER…], disable-linger [USER…]
+> 
+> Enable/disable user lingering for one or more users. If enabled for a specific user, a user manager is spawned for the user at boot and kept around after logouts. This allows users who are not logged in to run long-running services. Takes one or more user names or numeric UIDs as argument. If no argument is specified, enables/disables lingering for the user of the session of the caller.
+
+```shell
+loginctl enable-linger <username>
+```
+
 ## Examples
 
 ```shell

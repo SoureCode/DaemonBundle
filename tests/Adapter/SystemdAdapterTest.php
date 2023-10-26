@@ -4,34 +4,42 @@ namespace SoureCode\Bundle\Daemon\Tests\Adapter;
 
 use PHPUnit\Framework\TestCase;
 use SoureCode\Bundle\Daemon\Adapter\AdapterInterface;
-use SoureCode\Bundle\Daemon\Adapter\LaunchdAdapter;
+use SoureCode\Bundle\Daemon\Adapter\SystemdAdapter;
 use SoureCode\Bundle\Daemon\Tests\AbstractBaseTest;
+use Symfony\Component\Filesystem\Filesystem;
 
-class LaunchdAdapterTest extends TestCase
+class SystemdAdapterTest extends TestCase
 {
     private ?AdapterInterface $adapter = null;
+    private ?Filesystem $filesystem = null;
 
     public function setUp(): void
     {
         AbstractBaseTest::setUpTemplates();
-        $this->adapter = new LaunchdAdapter();
+        $this->filesystem = new Filesystem();
+        $this->adapter = new SystemdAdapter($this->filesystem);
     }
 
     public function tearDown(): void
     {
         $this->adapter = null;
+        $this->filesystem = null;
         AbstractBaseTest::tearDownTemplates();
     }
 
     public function testLoadUnloadIsLoaded(): void
     {
-        if (PHP_OS_FAMILY !== 'Darwin') {
+        if (PHP_OS_FAMILY !== 'Linux') {
             $this->markTestSkipped('This test is only for darwin');
         }
 
         // Arrange
-        $path = __DIR__ . '/../services/example1.plist';
+        $path = __DIR__ . '/../services/example1.service';
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
+
+        // Cleanup
+        $this->adapter->stop($service);
+        $this->adapter->unload($service);
 
         // Act
         $this->adapter->load($service);
@@ -51,13 +59,17 @@ class LaunchdAdapterTest extends TestCase
 
     public function testStartStopIsRunning(): void
     {
-        if (PHP_OS_FAMILY !== 'Darwin') {
+        if (PHP_OS_FAMILY !== 'Linux') {
             $this->markTestSkipped('This test is only for darwin');
         }
 
         // Arrange
-        $path = __DIR__ . '/../services/example1.plist';
+        $path = __DIR__ . '/../services/example1.service';
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
+
+        // Cleanup
+        $this->adapter->stop($service);
+        $this->adapter->unload($service);
 
         // Act
         $this->adapter->start($service);
@@ -78,14 +90,19 @@ class LaunchdAdapterTest extends TestCase
 
     public function testRestart(): void
     {
-        if (PHP_OS_FAMILY !== 'Darwin') {
-            $this->markTestSkipped('This test is only for darwin');
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('This test is only for linux');
         }
 
         // Arrange
-        $path = __DIR__ . '/../services/example1.plist';
+        $path = __DIR__ . '/../services/example1.service';
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
 
+        // Cleanup
+        $this->adapter->stop($service);
+        $this->adapter->unload($service);
+
+        // Act
         $this->adapter->start($service);
 
         $pid = $this->adapter->getPid($service);

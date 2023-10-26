@@ -13,8 +13,8 @@
 		<key>Disabled</key>
 		<true/>
 		<key>Program</key>
-		<string>/Users/jason/Projects/github/SoureCode/daemon-bundle/tests/daemons/long-running.sh</string>
+		<string>tests/daemons/long-running.sh</string>
 		<key>WorkingDirectory</key>
-		<string>/Users/jason/Projects/github/SoureCode/daemon-bundle/tests</string>
+		<string>{PROJECT_DIRECTORY}tests</string>
 	</dict>
 </plist>

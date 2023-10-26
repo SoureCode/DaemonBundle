@@ -7,14 +7,14 @@ use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use SplFileInfo;
 use Symfony\Component\Process\Process;
 
-class LaunchdAdapter implements AdapterInterface
+class LaunchdAdapter extends AbstractAdapter
 {
     public function createService(string $name, SplFileInfo $serviceFile): ServiceInterface
     {
         $contents = file_get_contents($serviceFile->getPathname());
         $config = $this->parseFile($contents);
 
-        return new LaunchdService($name, $serviceFile, $contents, $config);
+        return new LaunchdService($name, $serviceFile, $config);
     }
 
     private function parseFile(string $contents): array
@@ -97,21 +97,6 @@ class LaunchdAdapter implements AdapterInterface
         return $process->getOutput();
     }
 
-    private function findLine(string $output, string $text): ?string
-    {
-        $lines = preg_split('/\r?\n/', $output);
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-
-            if (str_contains($line, $text)) {
-                return $line;
-            }
-        }
-
-        return null;
-    }
-
     public function start(ServiceInterface $service): void
     {
         if ($service instanceof LaunchdService) {
@@ -131,14 +116,6 @@ class LaunchdAdapter implements AdapterInterface
             }
 
             $this->unload($service);
-        }
-    }
-
-    public function restart(ServiceInterface $service): void
-    {
-        if ($service instanceof LaunchdService) {
-            $this->stop($service);
-            $this->start($service);
         }
     }
 
@@ -184,11 +161,9 @@ class LaunchdAdapter implements AdapterInterface
     {
         if ($service instanceof LaunchdService) {
             $output = $this->launchctl('list');
-            $line = $this->findLine($output, $service->getLabel());
+            $columns = $this->findAndGetColumns($output, $service->getLabel());
 
-            if (null !== $line) {
-                $columns = preg_split('/\s+/', $line);
-
+            if (null !== $columns) {
                 return (int)$columns[0];
             }
         }
