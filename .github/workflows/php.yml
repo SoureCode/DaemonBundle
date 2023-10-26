@@ -11,7 +11,7 @@ jobs:
     name: PHP ${{ matrix.php }} and Symfony ${{ matrix.symfony }}
     strategy:
       matrix:
-        operating-system: [ ubuntu-latest ]
+        operating-system: [ ubuntu-latest, macos-latest ]
         php: [ '8.2' ]
         symfony: [ '6.3.*', '6.4.*', '7.0.*' ]
 
