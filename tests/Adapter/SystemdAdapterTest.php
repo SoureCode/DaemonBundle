@@ -30,7 +30,7 @@ class SystemdAdapterTest extends TestCase
     public function testLoadUnloadIsLoaded(): void
     {
         if (PHP_OS_FAMILY !== 'Linux') {
-            $this->markTestSkipped('This test is only for darwin');
+            $this->markTestSkipped('This test is only for linux');
         }
 
         // Arrange
@@ -60,7 +60,7 @@ class SystemdAdapterTest extends TestCase
     public function testStartStopIsRunning(): void
     {
         if (PHP_OS_FAMILY !== 'Linux') {
-            $this->markTestSkipped('This test is only for darwin');
+            $this->markTestSkipped('This test is only for linux');
         }
 
         // Arrange

@@ -119,37 +119,29 @@ class LaunchdAdapter extends AbstractAdapter
         }
     }
 
-    public function load(ServiceInterface $service): void
+    public function load(LaunchdService $service): void
     {
-        if ($service instanceof LaunchdService) {
-            if ($this->isLoaded($service)) {
-                return;
-            }
-
-            $this->launchctl('load', '-w', $service->getFilePath());
+        if ($this->isLoaded($service)) {
+            return;
         }
+
+        $this->launchctl('load', '-w', $service->getFilePath());
     }
 
-    public function unload(ServiceInterface $service): void
+    public function unload(LaunchdService $service): void
     {
-        if ($service instanceof LaunchdService) {
-            if (!$this->isLoaded($service)) {
-                return;
-            }
-
-            $this->launchctl('unload', '-w', $service->getFilePath());
+        if (!$this->isLoaded($service)) {
+            return;
         }
+
+        $this->launchctl('unload', '-w', $service->getFilePath());
     }
 
-    public function isLoaded(ServiceInterface $service): bool
+    public function isLoaded(LaunchdService $service): bool
     {
-        if ($service instanceof LaunchdService) {
-            $output = $this->launchctl('list');
+        $output = $this->launchctl('list');
 
-            return str_contains($output, $service->getLabel());
-        }
-
-        return false;
+        return str_contains($output, $service->getLabel());
     }
 
     public function isRunning(ServiceInterface $service): bool
@@ -157,15 +149,13 @@ class LaunchdAdapter extends AbstractAdapter
         return null !== $this->getPid($service);
     }
 
-    public function getPid(ServiceInterface $service): ?int
+    public function getPid(LaunchdService $service): ?int
     {
-        if ($service instanceof LaunchdService) {
-            $output = $this->launchctl('list');
-            $columns = $this->findAndGetColumns($output, $service->getLabel());
+        $output = $this->launchctl('list');
+        $columns = $this->findAndGetColumns($output, $service->getLabel());
 
-            if (null !== $columns) {
-                return (int)$columns[0];
-            }
+        if (null !== $columns) {
+            return (int)$columns[0];
         }
 
         return null;
