@@ -8,7 +8,6 @@ use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
-use const DIRECTORY_SEPARATOR;
 
 #[Autoconfigure(tags: ['monolog.logger' => 'daemon'])]
 class DaemonManager
@@ -87,11 +86,7 @@ class DaemonManager
 
             foreach ($serviceFiles as $serviceFile) {
                 if (true === $this->adapter->supports($serviceFile)) {
-                    $relativePath = $serviceFile->getRelativePath();
-                    $relativePath = str_replace(DIRECTORY_SEPARATOR, '.', $relativePath);
-
-                    $name = $relativePath . '.' . $serviceFile->getBasename('.' . $serviceFile->getExtension());
-                    $name = ltrim($name, '.');
+                    $name = $serviceFile->getBasename('.' . $serviceFile->getExtension());
 
                     $services[$name] = $this->adapter->createService($name, $serviceFile);
                 }
