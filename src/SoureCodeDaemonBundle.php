@@ -64,6 +64,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
         $services->set('soure_code_daemon.daemon_manager', DaemonManager::class)
             ->args([
                 service('soure_code_daemon.adapter.' . $adapter),
+                service('filesystem'),
                 param('soure_code_daemon.service_directory'),
             ]);
 

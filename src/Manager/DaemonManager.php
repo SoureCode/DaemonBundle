@@ -6,6 +6,7 @@ use InvalidArgumentException;
 use SoureCode\Bundle\Daemon\Adapter\AdapterInterface;
 use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 use const DIRECTORY_SEPARATOR;
 
@@ -20,6 +21,7 @@ class DaemonManager
 
     public function __construct(
         private readonly AdapterInterface $adapter,
+        private readonly Filesystem       $filesystem,
         private readonly string           $serviceDirectory,
     )
     {
@@ -70,6 +72,10 @@ class DaemonManager
     public function getServices(): array
     {
         if (null === $this->services) {
+            if (!$this->filesystem->exists($this->serviceDirectory)) {
+                return [];
+            }
+
             $finder = new Finder();
 
             $finder->files()
