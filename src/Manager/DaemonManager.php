@@ -136,4 +136,9 @@ class DaemonManager
 
         return $this->adapter->start($service);
     }
+
+    public function reload(): void
+    {
+        $this->services = null;
+    }
 }
