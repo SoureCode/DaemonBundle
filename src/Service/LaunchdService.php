@@ -2,11 +2,13 @@
 
 namespace SoureCode\Bundle\Daemon\Service;
 
+use SplFileInfo;
+
 class LaunchdService implements ServiceInterface
 {
     public function __construct(
         private readonly string       $name,
-        private readonly \SplFileInfo $file,
+        private readonly SplFileInfo $file,
         private readonly array        $config,
     )
     {

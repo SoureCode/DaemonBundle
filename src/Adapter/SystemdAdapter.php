@@ -2,6 +2,8 @@
 
 namespace SoureCode\Bundle\Daemon\Adapter;
 
+use Exception;
+use RuntimeException;
 use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use SoureCode\Bundle\Daemon\Service\SystemdService;
 use SplFileInfo;
@@ -25,70 +27,6 @@ class SystemdAdapter extends AbstractAdapter
         $config = $this->parseFile($contents);
 
         return new SystemdService($name, $serviceFile, $config);
-    }
-
-    public function supports(SplFileInfo $serviceFile): bool
-    {
-        if (false === $serviceFile->isFile()) {
-            return false;
-        }
-
-        if (false === $serviceFile->isReadable()) {
-            return false;
-        }
-
-        if ('service' !== $serviceFile->getExtension()) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * @param string ...$args
-     * @return string
-     */
-    private function systemctl(...$args): string
-    {
-        $process = new Process([
-            'systemctl',
-            ...$args,
-        ]);
-
-        $process->run();
-
-        return $process->getOutput();
-    }
-
-    public function start(ServiceInterface $service): void
-    {
-        if ($service instanceof SystemdService) {
-            $this->load($service);
-            $this->enable($service);
-
-            if (!$this->isRunning($service)) {
-                $this->systemctl('--user', 'start', $service->getName());
-            }
-        }
-    }
-
-    public function stop(ServiceInterface $service): void
-    {
-        if ($service instanceof SystemdService) {
-            if ($this->isRunning($service)) {
-                $this->systemctl('--user', 'stop', $service->getName());
-            }
-
-            $this->disable($service);
-            $this->unload($service);
-        }
-    }
-
-    public function isRunning(ServiceInterface $service): bool
-    {
-        $output = $this->systemctl('--user', 'status', $service->getName());
-
-        return str_contains($output, 'Active: active (running)');
     }
 
     private function parseFile(string $contents): array
@@ -122,7 +60,7 @@ class SystemdAdapter extends AbstractAdapter
                 $sections[$section] = [];
             } else {
                 if (null === $section) {
-                    throw new \Exception("Invalid file format.");
+                    throw new Exception("Invalid file format.");
                 }
 
                 $sections[$section][] = $line;
@@ -132,76 +70,42 @@ class SystemdAdapter extends AbstractAdapter
         return array_map($this->parseSection(...), $sections);
     }
 
-    /**
-     * @param list<string> $lines
-     * @return array<string, string>
-     */
-    public function parseSection(array $lines): array
+    public function supports(SplFileInfo $serviceFile): bool
     {
-        $data = [];
-        $continuation = false;
-        $key = null;
+        if (false === $serviceFile->isFile()) {
+            return false;
+        }
 
-        foreach ($lines as $line) {
-            if (null === $key) {
-                $parts = explode('=', $line, 2);
+        if (false === $serviceFile->isReadable()) {
+            return false;
+        }
 
-                if (count($parts) === 2) {
-                    $key = $parts[0];
-                } else {
-                    throw new \RuntimeException('Expected key.');
-                }
+        if ('service' !== $serviceFile->getExtension()) {
+            return false;
+        }
 
-                $data[$key] = $parts[1];
+        return true;
+    }
 
-                if (str_ends_with($line, '\\')) {
-                    $continuation = true;
-                } else {
-                    $continuation = false;
-                    $key = null;
-                }
-            } else {
-                if ($continuation) {
-                    $data[$key] .= ' ' . $line;
+    public function start(ServiceInterface $service): bool
+    {
+        if ($service instanceof SystemdService) {
+            $this->load($service);
+            $this->enable($service);
 
-                    if (str_ends_with($line, '\\')) {
-                        $continuation = true;
-                    } else {
-                        $continuation = false;
-                    }
-                } else {
-                    throw new \RuntimeException('Expected key.');
-                }
+            if ($this->isRunning($service)) {
+                return true;
             }
+
+            $this->systemctl('--user', 'start', $service->getName());
+
+            return $this->isRunning($service);
         }
 
-        foreach ($data as $key => $value) {
-            $data[$key] = $this->unquoteString($value);
-        }
-
-        return $data;
+        return false;
     }
 
-    private function unquoteString(string $input): string
-    {
-        return preg_replace_callback(
-            '/"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"|\'([^\'\\\\]*(?:\\\\.[^\'\\\\]*)*)\'/',
-            function ($matches) {
-                // Remove outer quotes
-                $quoted = substr($matches[0], 1, -1);
-
-                // Unescape inner quotes and backslashes
-                return str_replace(
-                    ['\\"', "\\'", '\\\\'],
-                    ['"', "'", '\\'],
-                    $quoted
-                );
-            },
-            $input
-        );
-    }
-
-    public function load(SystemdService $service): void
+    private function load(SystemdService $service): void
     {
         // Unload if loaded to ensure that the service is loaded with the latest configuration.
         if ($this->isLoaded($service)) {
@@ -212,6 +116,52 @@ class SystemdAdapter extends AbstractAdapter
         $this->filesystem->copy($service->getFilePath(), $serviceFile);
 
         $this->systemctl('--user', 'daemon-reload');
+    }
+
+    private function isLoaded(SystemdService $service): bool
+    {
+        $list = $this->systemctl('--user', 'status', $service->getName());
+        $columns = $this->findAndGetColumns($list, "Loaded: ");
+
+        if (null !== $columns) {
+            return $columns[1] === 'loaded';
+        }
+
+        return false;
+    }
+
+    /**
+     * @param string ...$args
+     * @return string
+     */
+    private function systemctl(...$args): string
+    {
+        $process = new Process([
+            'systemctl',
+            ...$args,
+        ]);
+
+        $process->run();
+
+        return $process->getOutput();
+    }
+
+    private function unload(SystemdService $service): void
+    {
+        if (!$this->isLoaded($service)) {
+            return;
+        }
+
+        $serviceFile = $this->getServiceFile($service);
+        $this->filesystem->remove($serviceFile);
+
+        $this->systemctl('--user', 'daemon-reload');
+        $this->systemctl('--user', 'reset-failed');
+    }
+
+    private function getServiceFile(SystemdService $service): string
+    {
+        return $this->getServiceDirectory() . '/' . $service->getName() . '.service';
     }
 
     private function getServiceDirectory(): string
@@ -241,7 +191,7 @@ class SystemdAdapter extends AbstractAdapter
                 if (is_string($env)) {
                     $this->userDirectory = $env;
                 } else {
-                    throw new \RuntimeException('Could not determine user directory.');
+                    throw new RuntimeException('Could not determine user directory.');
                 }
             }
         }
@@ -249,39 +199,15 @@ class SystemdAdapter extends AbstractAdapter
         return $this->userDirectory;
     }
 
-    private function getServiceFile(SystemdService $service): string
-    {
-        return $this->getServiceDirectory() . '/' . $service->getName() . '.service';
-    }
-
-    public function isLoaded(SystemdService $service): bool
-    {
-        $serviceFile = $this->getServiceFile($service);
-
-        if (!$this->filesystem->exists($serviceFile)) {
-            return false;
-        }
-
-        $list = $this->systemctl('--user', 'status', $service->getName());
-        $columns = $this->findAndGetColumns($list, "Loaded: ");
-
-        if (null !== $columns) {
-            return $columns[1] === 'loaded';
-        }
-
-        return false;
-    }
-
-    public function enable(SystemdService $service): void
+    private function enable(SystemdService $service): void
     {
         if (!$this->isEnabled($service)) {
             $this->systemctl('--user', 'enable', $service->getName());
         }
     }
 
-    public function isEnabled(SystemdService $service): bool
+    private function isEnabled(SystemdService $service): bool
     {
-        // systemctl --user list-unit-files
         $list = $this->systemctl('--user', 'list-unit-files', '--type=service', '--all');
         $columns = $this->findAndGetColumns($list, $service->getName());
 
@@ -292,24 +218,34 @@ class SystemdAdapter extends AbstractAdapter
         return false;
     }
 
-    public function disable(SystemdService $service): void
+    public function isRunning(ServiceInterface $service): bool
+    {
+        $output = $this->systemctl('--user', 'status', $service->getName());
+
+        return str_contains($output, 'Active: active (running)');
+    }
+
+    public function stop(ServiceInterface $service): bool
+    {
+        if ($service instanceof SystemdService) {
+            if ($this->isRunning($service)) {
+                $this->systemctl('--user', 'stop', $service->getName());
+            }
+
+            $this->disable($service);
+            $this->unload($service);
+
+            return !$this->isRunning($service);
+        }
+
+        return false;
+    }
+
+    private function disable(SystemdService $service): void
     {
         if ($this->isEnabled($service)) {
             $this->systemctl('--user', 'disable', $service->getName());
         }
-    }
-
-    public function unload(SystemdService $service): void
-    {
-        if (!$this->isLoaded($service)) {
-            return;
-        }
-
-        $serviceFile = $this->getServiceFile($service);
-        $this->filesystem->remove($serviceFile);
-
-        $this->systemctl('--user', 'daemon-reload');
-        $this->systemctl('--user', 'reset-failed');
     }
 
     public function getPid(SystemdService $service): ?int
@@ -324,5 +260,74 @@ class SystemdAdapter extends AbstractAdapter
         }
 
         return null;
+    }
+
+    /**
+     * @param list<string> $lines
+     * @return array<string, string>
+     */
+    private function parseSection(array $lines): array
+    {
+        $data = [];
+        $continuation = false;
+        $key = null;
+
+        foreach ($lines as $line) {
+            if (null === $key) {
+                $parts = explode('=', $line, 2);
+
+                if (count($parts) === 2) {
+                    $key = $parts[0];
+                } else {
+                    throw new RuntimeException('Expected key.');
+                }
+
+                $data[$key] = $parts[1];
+
+                if (str_ends_with($line, '\\')) {
+                    $continuation = true;
+                } else {
+                    $continuation = false;
+                    $key = null;
+                }
+            } else {
+                if ($continuation) {
+                    $data[$key] .= ' ' . $line;
+
+                    if (str_ends_with($line, '\\')) {
+                        $continuation = true;
+                    } else {
+                        $continuation = false;
+                    }
+                } else {
+                    throw new RuntimeException('Expected key.');
+                }
+            }
+        }
+
+        foreach ($data as $key => $value) {
+            $data[$key] = $this->unquoteString($value);
+        }
+
+        return $data;
+    }
+
+    private function unquoteString(string $input): string
+    {
+        return preg_replace_callback(
+            '/"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"|\'([^\'\\\\]*(?:\\\\.[^\'\\\\]*)*)\'/',
+            function ($matches) {
+                // Remove outer quotes
+                $quoted = substr($matches[0], 1, -1);
+
+                // Unescape inner quotes and backslashes
+                return str_replace(
+                    ['\\"', "\\'", '\\\\'],
+                    ['"', "'", '\\'],
+                    $quoted
+                );
+            },
+            $input
+        );
     }
 }

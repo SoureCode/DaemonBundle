@@ -2,14 +2,12 @@
 
 namespace SoureCode\Bundle\Daemon\Manager;
 
-use InvalidArgumentException;
 use SoureCode\Bundle\Daemon\Adapter\AdapterInterface;
 use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 
-#[Autoconfigure(tags: ['monolog.logger' => 'daemon'])]
 class DaemonManager
 {
     /**
@@ -26,43 +24,22 @@ class DaemonManager
     {
     }
 
-    public function start(string|ServiceInterface $service): void
+    public function isRunning(string|ServiceInterface $serviceOrServiceName): bool
     {
-        if (is_string($service)) {
-            $service = $this->getService($service);
-        }
+        $service = is_string($serviceOrServiceName) ? $this->getService($serviceOrServiceName) : $serviceOrServiceName;
 
-        $this->adapter->start($service);
-    }
-
-    public function isRunning(string|ServiceInterface $service): bool
-    {
-        if (is_string($service)) {
-            $service = $this->getService($service);
+        if (null === $service) {
+            return false;
         }
 
         return $this->adapter->isRunning($service);
     }
 
-
-    public function stopAll(?string $pattern = null): void
+    public function getService(string $name): ?ServiceInterface
     {
-        foreach ($this->getServiceNames() as $name) {
-            if (null !== $pattern && !str_contains($name, $pattern)) {
-                continue;
-            }
+        $services = $this->getServices();
 
-            $this->stop($name);
-        }
-    }
-
-    public function stop(string|ServiceInterface $service): void
-    {
-        if (is_string($service)) {
-            $service = $this->getService($service);
-        }
-
-        $this->adapter->stop($service);
+        return $services[$name] ?? null;
     }
 
     /**
@@ -100,6 +77,21 @@ class DaemonManager
         return $this->services;
     }
 
+    public function stopAll(?string $pattern = null): bool
+    {
+        $stopped = [];
+
+        foreach ($this->getServiceNames() as $name) {
+            if (null !== $pattern && !str_contains($name, $pattern)) {
+                continue;
+            }
+
+            $stopped[] = $this->stop($name);
+        }
+
+        return !in_array(false, $stopped, true);
+    }
+
     /**
      * @return list<string>
      */
@@ -108,14 +100,40 @@ class DaemonManager
         return array_keys($this->getServices());
     }
 
-    public function getService(string $name): ServiceInterface
+    public function stop(string|ServiceInterface $serviceOrServiceName): bool
     {
-        $services = $this->getServices();
+        $service = is_string($serviceOrServiceName) ? $this->getService($serviceOrServiceName) : $serviceOrServiceName;
 
-        if (!array_key_exists($name, $services)) {
-            throw new InvalidArgumentException(sprintf('Service "%s" not found.', $name));
+        if (null === $service) {
+            return false;
         }
 
-        return $services[$name];
+        return $this->adapter->stop($service);
+    }
+
+    public function startAll(?string $pattern = null): bool
+    {
+        $started = [];
+
+        foreach ($this->getServiceNames() as $name) {
+            if (null !== $pattern && !str_contains($name, $pattern)) {
+                continue;
+            }
+
+            $started[] = $this->start($name);
+        }
+
+        return !in_array(false, $started, true);
+    }
+
+    public function start(string|ServiceInterface $serviceOrServiceName): bool
+    {
+        $service = is_string($serviceOrServiceName) ? $this->getService($serviceOrServiceName) : $serviceOrServiceName;
+
+        if (null === $service) {
+            return false;
+        }
+
+        return $this->adapter->start($service);
     }
 }

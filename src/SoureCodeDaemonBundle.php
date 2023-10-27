@@ -2,6 +2,7 @@
 
 namespace SoureCode\Bundle\Daemon;
 
+use RuntimeException;
 use SoureCode\Bundle\Daemon\Command\DaemonStartCommand;
 use SoureCode\Bundle\Daemon\Command\DaemonStopCommand;
 use SoureCode\Bundle\Daemon\Manager\DaemonManager;
@@ -57,7 +58,7 @@ class SoureCodeDaemonBundle extends AbstractBundle
             } elseif (PHP_OS_FAMILY === 'Darwin') {
                 $adapter = 'launchd';
             } else {
-                throw new \RuntimeException('Could not detect adapter.');
+                throw new RuntimeException('Could not detect adapter.');
             }
         }
 

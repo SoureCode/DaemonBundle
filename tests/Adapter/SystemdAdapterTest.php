@@ -27,36 +27,6 @@ class SystemdAdapterTest extends TestCase
         AbstractBaseTest::tearDownTemplates();
     }
 
-    public function testLoadUnloadIsLoaded(): void
-    {
-        if (PHP_OS_FAMILY !== 'Linux') {
-            $this->markTestSkipped('This test is only for linux');
-        }
-
-        // Arrange
-        $path = __DIR__ . '/../services/example1.service';
-        $service = $this->adapter->createService('example1', new \SplFileInfo($path));
-
-        // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
-
-        // Act
-        $this->adapter->load($service);
-
-        // Assert
-        $this->assertTrue($this->adapter->isLoaded($service));
-
-        // Act
-        $this->adapter->unload($service);
-
-        // Assert
-        $this->assertFalse($this->adapter->isLoaded($service));
-
-        // Cleanup
-        $this->adapter->unload($service);
-    }
-
     public function testStartStopIsRunning(): void
     {
         if (PHP_OS_FAMILY !== 'Linux') {
@@ -68,24 +38,22 @@ class SystemdAdapterTest extends TestCase
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
 
         // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
+        $this->assertTrue($this->adapter->stop($service));
 
         // Act
-        $this->adapter->start($service);
+        $this->assertTrue($this->adapter->start($service));
 
         // Assert
         $this->assertTrue($this->adapter->isRunning($service));
 
         // Act
-        $this->adapter->stop($service);
+        $this->assertTrue($this->adapter->stop($service));
 
         // Assert
         $this->assertFalse($this->adapter->isRunning($service));
 
         // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
+        $this->assertTrue($this->adapter->stop($service));
     }
 
     public function testRestart(): void
@@ -99,22 +67,20 @@ class SystemdAdapterTest extends TestCase
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
 
         // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
+        $this->assertTrue($this->adapter->stop($service));
 
         // Act
-        $this->adapter->start($service);
+        $this->assertTrue($this->adapter->start($service));
 
         $pid = $this->adapter->getPid($service);
 
         // Act
-        $this->adapter->restart($service);
+        $this->assertTrue($this->adapter->restart($service));
 
         // Assert
         $this->assertNotEquals($pid, $this->adapter->getPid($service));
 
         // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
+        $this->assertTrue($this->adapter->stop($service));
     }
 }

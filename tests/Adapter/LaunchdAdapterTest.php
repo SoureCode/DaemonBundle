@@ -23,32 +23,6 @@ class LaunchdAdapterTest extends TestCase
         AbstractBaseTest::tearDownTemplates();
     }
 
-    public function testLoadUnloadIsLoaded(): void
-    {
-        if (PHP_OS_FAMILY !== 'Darwin') {
-            $this->markTestSkipped('This test is only for darwin');
-        }
-
-        // Arrange
-        $path = __DIR__ . '/../services/example1.plist';
-        $service = $this->adapter->createService('example1', new \SplFileInfo($path));
-
-        // Act
-        $this->adapter->load($service);
-
-        // Assert
-        $this->assertTrue($this->adapter->isLoaded($service));
-
-        // Act
-        $this->adapter->unload($service);
-
-        // Assert
-        $this->assertFalse($this->adapter->isLoaded($service));
-
-        // Cleanup
-        $this->adapter->unload($service);
-    }
-
     public function testStartStopIsRunning(): void
     {
         if (PHP_OS_FAMILY !== 'Darwin') {
@@ -60,20 +34,19 @@ class LaunchdAdapterTest extends TestCase
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
 
         // Act
-        $this->adapter->start($service);
+        $this->assertTrue($this->adapter->start($service));
 
         // Assert
         $this->assertTrue($this->adapter->isRunning($service));
 
         // Act
-        $this->adapter->stop($service);
+        $this->assertTrue($this->adapter->stop($service));
 
         // Assert
         $this->assertFalse($this->adapter->isRunning($service));
 
         // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
+        $this->assertTrue($this->adapter->stop($service));
     }
 
     public function testRestart(): void
@@ -86,18 +59,17 @@ class LaunchdAdapterTest extends TestCase
         $path = __DIR__ . '/../services/example1.plist';
         $service = $this->adapter->createService('example1', new \SplFileInfo($path));
 
-        $this->adapter->start($service);
+        $this->assertTrue($this->adapter->start($service));
 
         $pid = $this->adapter->getPid($service);
 
         // Act
-        $this->adapter->restart($service);
+        $this->assertTrue($this->adapter->restart($service));
 
         // Assert
         $this->assertNotEquals($pid, $this->adapter->getPid($service));
 
         // Cleanup
-        $this->adapter->stop($service);
-        $this->adapter->unload($service);
+        $this->assertTrue($this->adapter->stop($service));
     }
 }

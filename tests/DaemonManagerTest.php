@@ -82,40 +82,40 @@ class DaemonManagerTest extends AbstractBaseTest
         self::assertFalse($daemonManager->isRunning('example1'));
 
         // Act
-        $daemonManager->start('example1');
+        self::assertTrue($daemonManager->start('example1'));
 
         // Assert
         self::assertTrue($daemonManager->isRunning('example1'));
 
         // Act
-        $daemonManager->stop('example1');
+        self::assertTrue($daemonManager->stop('example1'));
 
         // Assert
         self::assertFalse($daemonManager->isRunning('example1'));
 
         // Act
-        $daemonManager->start('example1');
+        self::assertTrue($daemonManager->start('example1'));
 
         // Assert
         self::assertTrue($daemonManager->isRunning('example1'));
 
         // Act
-        $daemonManager->stopAll('bar');
+        self::assertTrue($daemonManager->stopAll('bar'));
 
         // Assert
         self::assertTrue($daemonManager->isRunning('example1'));
 
         // Act
-        $daemonManager->stopAll('example');
+        self::assertTrue($daemonManager->stopAll('example'));
 
         // Assert
         self::assertFalse($daemonManager->isRunning('example1'));
 
         // Arrange
-        $daemonManager->start('example1');
+        self::assertTrue($daemonManager->start('example1'));
 
         // Act
-        $daemonManager->stopAll();
+        self::assertTrue($daemonManager->stopAll());
 
         // Assert
         self::assertFalse($daemonManager->isRunning('example1'));

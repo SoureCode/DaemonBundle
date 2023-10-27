@@ -2,6 +2,8 @@
 
 namespace SoureCode\Bundle\Daemon\Adapter;
 
+use RuntimeException;
+use SimpleXMLElement;
 use SoureCode\Bundle\Daemon\Service\LaunchdService;
 use SoureCode\Bundle\Daemon\Service\ServiceInterface;
 use SplFileInfo;
@@ -22,16 +24,16 @@ class LaunchdAdapter extends AbstractAdapter
         $xml = simplexml_load_string($contents);
 
         if (false === $xml) {
-            throw new \RuntimeException('Could not parse xml.');
+            throw new RuntimeException('Could not parse xml.');
         }
 
         return $this->parseDict($xml->children());
     }
 
-    private function parseDict(\SimpleXMLElement $dict): array
+    private function parseDict(SimpleXMLElement $dict): array
     {
         if ('dict' !== $dict->getName()) {
-            throw new \RuntimeException('Expected dict.');
+            throw new RuntimeException('Expected dict.');
         }
 
         $data = [];
@@ -44,14 +46,14 @@ class LaunchdAdapter extends AbstractAdapter
                 $data[$key] = $this->parseValue($child);
                 $key = null;
             } else {
-                throw new \RuntimeException('Expected key.');
+                throw new RuntimeException('Expected key.');
             }
         }
 
         return $data;
     }
 
-    private function parseValue(\SimpleXMLElement $child): array|bool|int|string
+    private function parseValue(SimpleXMLElement $child): array|bool|int|string
     {
         $name = $child->getName();
 
@@ -65,7 +67,7 @@ class LaunchdAdapter extends AbstractAdapter
         };
     }
 
-    private function parseArray(\SimpleXMLElement $child): array
+    private function parseArray(SimpleXMLElement $child): array
     {
         $data = [];
 
@@ -93,6 +95,40 @@ class LaunchdAdapter extends AbstractAdapter
         return true;
     }
 
+    public function start(ServiceInterface $service): bool
+    {
+        if ($service instanceof LaunchdService) {
+            $this->load($service);
+
+            if ($this->isRunning($service)) {
+                return true;
+            }
+
+            $this->launchctl('start', $service->getLabel());
+
+            return $this->isRunning($service);
+        }
+
+        return false;
+    }
+
+    private function load(LaunchdService $service): void
+    {
+        // Unload if loaded to ensure that the service is loaded with the latest configuration.
+        if ($this->isLoaded($service)) {
+            $this->unload($service);
+        }
+
+        $this->launchctl('load', '-w', $service->getFilePath());
+    }
+
+    private function isLoaded(LaunchdService $service): bool
+    {
+        $output = $this->launchctl('list');
+
+        return str_contains($output, $service->getLabel());
+    }
+
     /**
      * @param string ...$args
      * @return string
@@ -109,39 +145,7 @@ class LaunchdAdapter extends AbstractAdapter
         return $process->getOutput();
     }
 
-    public function start(ServiceInterface $service): void
-    {
-        if ($service instanceof LaunchdService) {
-            $this->load($service);
-
-            if (!$this->isRunning($service)) {
-                $this->launchctl('start', $service->getLabel());
-            }
-        }
-    }
-
-    public function stop(ServiceInterface $service): void
-    {
-        if ($service instanceof LaunchdService) {
-            if ($this->isRunning($service)) {
-                $this->launchctl('stop', $service->getLabel());
-            }
-
-            $this->unload($service);
-        }
-    }
-
-    public function load(LaunchdService $service): void
-    {
-        // Unload if loaded to ensure that the service is loaded with the latest configuration.
-        if ($this->isLoaded($service)) {
-            $this->unload($service);
-        }
-
-        $this->launchctl('load', '-w', $service->getFilePath());
-    }
-
-    public function unload(LaunchdService $service): void
+    private function unload(LaunchdService $service): void
     {
         if (!$this->isLoaded($service)) {
             return;
@@ -150,27 +154,39 @@ class LaunchdAdapter extends AbstractAdapter
         $this->launchctl('unload', '-w', $service->getFilePath());
     }
 
-    public function isLoaded(LaunchdService $service): bool
-    {
-        $output = $this->launchctl('list');
-
-        return str_contains($output, $service->getLabel());
-    }
-
     public function isRunning(ServiceInterface $service): bool
     {
         return null !== $this->getPid($service);
     }
 
-    public function getPid(LaunchdService $service): ?int
+    public function getPid(ServiceInterface $service): ?int
     {
-        $output = $this->launchctl('list');
-        $columns = $this->findAndGetColumns($output, $service->getLabel());
+        if ($service instanceof LaunchdService) {
+            $output = $this->launchctl('list');
+            $columns = $this->findAndGetColumns($output, $service->getLabel());
 
-        if (null !== $columns) {
-            return (int)$columns[0];
+            if (null !== $columns) {
+                return (int)$columns[0];
+            }
         }
 
         return null;
+    }
+
+    public function stop(ServiceInterface $service): bool
+    {
+        if ($service instanceof LaunchdService) {
+            if (!$this->isRunning($service)) {
+                return true;
+            }
+
+            $this->launchctl('stop', $service->getLabel());
+
+            $this->unload($service);
+
+            return !$this->isRunning($service);
+        }
+
+        return false;
     }
 }

@@ -10,7 +10,6 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 
 #[AsCommand(
     name: 'daemon:stop',
@@ -41,12 +40,18 @@ final class DaemonStopCommand extends Command
         $all = $input->getOption('all');
         $name = $input->getArgument('name');
 
+        if (null === $name && null === $all) {
+            throw new RuntimeException('You need to specify a daemon name or use the --all option.');
+        }
+
+        if (null !== $name && null !== $all) {
+            throw new RuntimeException('You can not specify a daemon name and use the --all option at the same time.');
+        }
+
         if (null !== $all) {
-            if (is_string($all)) {
-                $this->daemonManager->stopAll($all);
-            } else {
-                $this->daemonManager->stopAll();
-            }
+            $stopped = is_string($all) ? $this->daemonManager->stopAll($all) : $this->daemonManager->stopAll();
+
+            return $stopped ? Command::SUCCESS : Command::FAILURE;
         }
 
         if (null === $name) {
@@ -54,13 +59,14 @@ final class DaemonStopCommand extends Command
         }
 
         if (is_array($name)) {
+            $stopped = [];
             foreach ($name as $daemonName) {
-                $this->daemonManager->stop($daemonName);
+                $stopped[] = $this->daemonManager->stop($daemonName);
             }
-        } else {
-            $this->daemonManager->stop($name);
+
+            return in_array(false, $stopped, true) ? Command::FAILURE : Command::SUCCESS;
         }
 
-        return Command::SUCCESS;
+        return $this->daemonManager->stop($name) ? Command::SUCCESS : Command::FAILURE;
     }
 }
