@@ -166,7 +166,13 @@ class LaunchdAdapter extends AbstractAdapter
             $columns = $this->findAndGetColumns($output, $service->getLabel());
 
             if (null !== $columns) {
-                return (int)$columns[0];
+                $pidColumn = $columns[0];
+
+                if (is_numeric($pidColumn)) {
+                    return (int)$pidColumn;
+                }
+
+                return null;
             }
         }
 
