@@ -11,6 +11,9 @@
          stopOnFailure="false"
          bootstrap="./vendor/autoload.php"
 >
+    <php>
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="weak" />
+    </php>
     <coverage>
         <include>
             <directory suffix=".php">./</directory>
