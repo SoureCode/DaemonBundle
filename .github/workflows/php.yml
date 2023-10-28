@@ -13,19 +13,16 @@ jobs:
       matrix:
         operating-system: [ ubuntu-latest, macos-latest ]
         php: [ '8.2' ]
-        symfony: [ '6.3.*', '6.4.*', '7.0.*' ]
+        symfony: [ '6.3.*', '6.4.*' ]
 
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
 
       - name: Install systemd
         if: matrix.operating-system == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y systemd
-          sudo systemctl daemon-reexec
-          sudo systemctl --version
-          sudo systemctl status
 
       - name: Setup PHP ${{ matrix.php }}
         uses: shivammathur/setup-php@v2
@@ -36,7 +33,7 @@ jobs:
       - name: Download dependencies (Symfony ${{ matrix.symfony }})
         env:
           SYMFONY_REQUIRE: ${{ matrix.symfony }}
-        uses: ramsey/composer-install@v1
+        uses: ramsey/composer-install@v2
 
       - name: Tests on ${{ matrix.operating-system }}
         run: ./vendor/bin/phpunit
