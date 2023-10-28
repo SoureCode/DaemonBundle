@@ -1,3 +1,4 @@
 vendor/
 tests/var/
 .phpunit.result.cache
+composer.lock
