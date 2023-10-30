@@ -11,9 +11,9 @@
 - [`daemon:start`](./daemon-start.md) - Starts a daemon.
 - [`daemon:stop`](./daemon-stop.md) - Stop one or all daemons.
 
-## Notes
+## Important
 
-If you are using the systemd service manager, ensure your user can run daemons after logout.
+If you are using the systemd, you must enable lingering.
 
 > enable-linger [USER…], disable-linger [USER…]
 > 

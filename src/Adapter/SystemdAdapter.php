@@ -136,9 +136,14 @@ class SystemdAdapter extends AbstractAdapter
      */
     private function systemctl(...$args): string
     {
+        $uid = posix_getuid();
+
         $process = new Process([
             'systemctl',
             ...$args,
+        ], env: [
+            'XDG_RUNTIME_DIR' => '/run/user/' . $uid,
+            'DBUS_SESSION_BUS_ADDRESS' => 'unix:path=/run/user/' . $uid . '/bus',
         ]);
 
         $process->run();

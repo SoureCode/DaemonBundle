@@ -4,7 +4,6 @@ namespace SoureCode\Bundle\Daemon\Manager;
 
 use SoureCode\Bundle\Daemon\Adapter\AdapterInterface;
 use SoureCode\Bundle\Daemon\Service\ServiceInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 
