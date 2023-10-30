@@ -10,7 +10,7 @@ class BundleInitializationTest extends AbstractBaseTest
         $container = self::getContainer();
 
         // Test if your services exists
-        $this->assertTrue($container->has('soure_code_daemon.command.daemon.start'), 'DaemonStartCommand is registered');
-        $this->assertTrue($container->has('soure_code_daemon.command.daemon.stop'), 'DaemonStopCommand is registered');
+        $this->assertTrue($container->has('soure_code.daemon.command.daemon.start'), 'DaemonStartCommand is registered');
+        $this->assertTrue($container->has('soure_code.daemon.command.daemon.stop'), 'DaemonStopCommand is registered');
     }
 }

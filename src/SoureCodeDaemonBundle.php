@@ -39,16 +39,16 @@ class SoureCodeDaemonBundle extends AbstractBundle
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
         $container->parameters()
-            ->set('soure_code_daemon.service_directory', $config['directory']);
+            ->set('soure_code.daemon.directory', $config['directory']);
 
         $services = $container->services();
 
-        $services->set('soure_code_daemon.adapter.systemd', Adapter\SystemdAdapter::class)
+        $services->set('soure_code.daemon.adapter.systemd', Adapter\SystemdAdapter::class)
             ->args([
                 service('filesystem'),
             ]);
 
-        $services->set('soure_code_daemon.adapter.launchd', Adapter\LaunchdAdapter::class);
+        $services->set('soure_code.daemon.adapter.launchd', Adapter\LaunchdAdapter::class);
 
         $adapter = $config['adapter'];
 
@@ -62,26 +62,26 @@ class SoureCodeDaemonBundle extends AbstractBundle
             }
         }
 
-        $services->set('soure_code_daemon.daemon_manager', DaemonManager::class)
+        $services->set('soure_code.daemon.daemon_manager', DaemonManager::class)
             ->args([
-                service('soure_code_daemon.adapter.' . $adapter),
+                service('soure_code.daemon.adapter.' . $adapter),
                 service('filesystem'),
-                param('soure_code_daemon.service_directory'),
+                param('soure_code.daemon.directory'),
             ]);
 
-        $services->alias(DaemonManager::class, 'soure_code_daemon.daemon_manager')
+        $services->alias(DaemonManager::class, 'soure_code.daemon.daemon_manager')
             ->public();
 
-        $services->set('soure_code_daemon.command.daemon.start', DaemonStartCommand::class)
+        $services->set('soure_code.daemon.command.daemon.start', DaemonStartCommand::class)
             ->args([
-                service('soure_code_daemon.daemon_manager'),
+                service('soure_code.daemon.daemon_manager'),
             ])
             ->public()
             ->tag('console.command', ['command' => 'daemon:start']);
 
-        $services->set('soure_code_daemon.command.daemon.stop', DaemonStopCommand::class)
+        $services->set('soure_code.daemon.command.daemon.stop', DaemonStopCommand::class)
             ->args([
-                service('soure_code_daemon.daemon_manager'),
+                service('soure_code.daemon.daemon_manager'),
             ])
             ->public()
             ->tag('console.command', ['command' => 'daemon:stop']);
