@@ -120,7 +120,7 @@ class SystemdAdapter extends AbstractAdapter
 
     private function isLoaded(SystemdService $service): bool
     {
-        $list = $this->systemctl('--user', 'status', $service->getName());
+        $list = $this->getStatus($service);
         $columns = $this->findAndGetColumns($list, "Loaded: ");
 
         if (null !== $columns) {
@@ -128,6 +128,11 @@ class SystemdAdapter extends AbstractAdapter
         }
 
         return false;
+    }
+
+    public function getStatus(ServiceInterface $service): string
+    {
+        return $this->systemctl('--user', 'status', $service->getName());
     }
 
     /**
@@ -225,7 +230,7 @@ class SystemdAdapter extends AbstractAdapter
 
     public function isRunning(ServiceInterface $service): bool
     {
-        $output = $this->systemctl('--user', 'status', $service->getName());
+        $output = $this->getStatus($service);
 
         return str_contains($output, 'Active: active (running)');
     }
@@ -253,7 +258,7 @@ class SystemdAdapter extends AbstractAdapter
         }
     }
 
-    public function getPid(SystemdService $service): ?int
+    public function getPid(ServiceInterface $service): ?int
     {
         $output = $this->systemctl('--user', 'show', '--property', 'MainPID', $service->getName());
         $output = str_replace('MainPID=', '', $output);
@@ -265,6 +270,20 @@ class SystemdAdapter extends AbstractAdapter
         }
 
         return null;
+    }
+
+    public function reload(ServiceInterface $service): bool
+    {
+        if ($service instanceof SystemdService) {
+            $serviceFile = $this->getServiceFile($service);
+            $this->filesystem->copy($service->getFilePath(), $serviceFile);
+
+            $this->systemctl('--user', 'daemon-reload');
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

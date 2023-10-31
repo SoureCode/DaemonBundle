@@ -55,4 +55,12 @@ interface AdapterInterface
      * @return bool True if the service is running, false otherwise
      */
     public function isRunning(ServiceInterface $service): bool;
+
+    /**
+     * Reloads a service.
+     *
+     * @param ServiceInterface $service
+     * @return bool True if the service was reloaded, false if it failed to reload
+     */
+    public function reload(ServiceInterface $service): bool;
 }

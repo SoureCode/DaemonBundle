@@ -136,8 +136,30 @@ class DaemonManager
         return $this->adapter->start($service);
     }
 
-    public function reload(): void
+    public function reset(): void
     {
         $this->services = null;
+    }
+
+    public function reload(string|ServiceInterface $serviceOrServiceName): bool
+    {
+        $service = is_string($serviceOrServiceName) ? $this->getService($serviceOrServiceName) : $serviceOrServiceName;
+
+        if (null === $service) {
+            return false;
+        }
+
+        return $this->adapter->reload($service);
+    }
+
+    public function restart(string|ServiceInterface $serviceOrServiceName): bool
+    {
+        $service = is_string($serviceOrServiceName) ? $this->getService($serviceOrServiceName) : $serviceOrServiceName;
+
+        if (null === $service) {
+            return false;
+        }
+
+        return $this->adapter->restart($service);
     }
 }

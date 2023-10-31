@@ -7,9 +7,9 @@ use SplFileInfo;
 class LaunchdService implements ServiceInterface
 {
     public function __construct(
-        private readonly string       $name,
+        private readonly string      $name,
         private readonly SplFileInfo $file,
-        private readonly array        $config,
+        private readonly array       $config,
     )
     {
     }

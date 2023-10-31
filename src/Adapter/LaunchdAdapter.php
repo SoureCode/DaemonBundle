@@ -104,8 +104,6 @@ class LaunchdAdapter extends AbstractAdapter
                 return true;
             }
 
-            $this->launchctl('start', $service->getLabel());
-
             return $this->isRunning($service);
         }
 
@@ -186,11 +184,26 @@ class LaunchdAdapter extends AbstractAdapter
                 return true;
             }
 
-            $this->launchctl('stop', $service->getLabel());
-
             $this->unload($service);
 
             return !$this->isRunning($service);
+        }
+
+        return false;
+    }
+
+    public function reload(ServiceInterface $service): bool
+    {
+        if ($service instanceof LaunchdService) {
+            if (!$this->isLoaded($service)) {
+                return false;
+            }
+
+            // this also means that the service will restart, for launchd its fine as I see it only as used in dev.
+            $this->unload($service);
+            $this->load($service);
+
+            return true;
         }
 
         return false;
